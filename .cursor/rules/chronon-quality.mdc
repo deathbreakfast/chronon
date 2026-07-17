@@ -1,0 +1,38 @@
+---
+description: Chronon code quality, Sentrux gates, clippy, rustdoc, and module discipline
+alwaysApply: true
+---
+
+# Chronon quality gate
+
+**Repo:** `/home/seanorourke/chronon` · **Facade:** `chronon` (`prelude` re-exports) · **Features:** none default; opt-in `mem`, `telemetry-console`, `axum`
+
+## Before finishing
+
+1. Sentrux MCP: `scan` path=`/home/seanorourke/chronon` — `quality_signal` must stay ≥ **7424**
+2. Sentrux: `check_rules` — zero violations (`.sentrux/rules.toml`)
+3. `cargo clippy --workspace --all-targets -- -D warnings`
+4. `cargo test --workspace`
+5. `cargo machete` — no unused deps
+6. `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
+7. `cargo test --doc` on crates with `# Examples` (core, backend-mem, runtime, scheduler, executor, axum)
+
+## Module discipline
+
+- **SLOC target ≤400, hard stop 450** (code only; rustdoc excluded)
+- **CC ≤25** per function; fan-out ≤15; no god files / kitchen sinks
+- No wildcard `pub use foo::*`; thin `lib.rs`; one responsibility per module
+- Exemplar: `chronon-axum/src/handlers.rs` — small per-route handlers
+
+## Rustdoc
+
+- `//!` landing pages on crate/submodule roots (getting started, documentation map)
+- `///` on every public item; `# Examples` on major entry points
+- No `#![allow(missing_docs)]` without explicit approval
+
+## Lint policy
+
+- No new `#[allow(dead_code)]` or inline clippy allows — fix or use `clippy.toml`
+- Layering: core → engine → runtime → facade; testkit/e2e/bench never imported by lower layers
+
+Full checklist: [CONTRIBUTING.md](../CONTRIBUTING.md)

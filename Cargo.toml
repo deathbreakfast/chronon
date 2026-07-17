@@ -1,0 +1,103 @@
+[workspace]
+resolver = "2"
+members = [
+    "chronon-core",
+    "chronon-macros",
+    "chronon-telemetry",
+    "chronon-backend-mem",
+    "chronon-backend-sql-common",
+    "chronon-backend-postgres",
+    "chronon-backend-sqlite",
+    "chronon-backend-redis",
+    "chronon-scheduler",
+    "chronon-executor",
+    "chronon-runtime",
+    "chronon-axum",
+    "chronon",
+    "chronon-testkit",
+    "chronon-e2e",
+    "chronon-bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.88"
+description = "Cron and run-once scheduler for Rust"
+repository = "https://github.com/unified-field-dev/chronon"
+homepage = "https://github.com/unified-field-dev/chronon"
+documentation = "https://docs.rs/uf-chronon"
+authors = ["unified-field-dev"]
+keywords = ["cron", "scheduler", "jobs", "async", "tokio"]
+categories = ["asynchronous", "date-and-time"]
+
+[workspace.dependencies]
+chronon-core = { path = "chronon-core", version = "0.1.0" }
+chronon-macros = { path = "chronon-macros", version = "0.1.0" }
+chronon-telemetry = { path = "chronon-telemetry", version = "0.1.0" }
+chronon-backend-mem = { path = "chronon-backend-mem", version = "0.1.0" }
+chronon-backend-sql-common = { path = "chronon-backend-sql-common", version = "0.1.0" }
+chronon-backend-postgres = { path = "chronon-backend-postgres", version = "0.1.0" }
+chronon-backend-sqlite = { path = "chronon-backend-sqlite", version = "0.1.0" }
+chronon-backend-redis = { path = "chronon-backend-redis", version = "0.1.0" }
+chronon-scheduler = { path = "chronon-scheduler", version = "0.1.0" }
+chronon-executor = { path = "chronon-executor", version = "0.1.0" }
+chronon-runtime = { path = "chronon-runtime", version = "0.1.0" }
+chronon-axum = { path = "chronon-axum", version = "0.1.0" }
+chronon-testkit = { path = "chronon-testkit", version = "0.1.0" }
+chronon-bench = { path = "chronon-bench", version = "0.1.0" }
+quark = { package = "uf-quark", version = "0.1.1" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+croner = "2"
+chrono-tz = "0.10"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+axum = "0.8"
+tower = "0.5"
+http = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+paste = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "chrono", "json", "sqlite", "postgres"] }
+tempfile = "3"
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "connection-manager", "cluster-async", "script"] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+significant_drop_tightening = "allow"
+unused_async = "allow"
+unnecessary_wraps = "allow"
+use_self = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+ignored_unit_patterns = "allow"
+needless_pass_by_value = "allow"
+missing_const_for_fn = "allow"
+duration_suboptimal_units = "allow"
+return_self_not_must_use = "allow"
+redundant_pub_crate = "allow"
+uninlined_format_args = "allow"
+option_if_let_else = "allow"
+redundant_closure_for_method_calls = "allow"
+redundant_closure = "allow"
+cast_precision_loss = "allow"
+redundant_clone = "warn"
+
+[workspace.lints.rust]
+missing_docs = "deny"

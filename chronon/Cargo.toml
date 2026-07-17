@@ -1,0 +1,101 @@
+[package]
+name = "uf-chronon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Public facade for Chronon cron and run-once scheduler"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/uf-chronon"
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "chronon"
+path = "src/lib.rs"
+
+[features]
+default = []
+mem = ["dep:chronon-backend-mem"]
+sqlite = ["dep:chronon-backend-sqlite"]
+postgres = ["dep:chronon-backend-postgres"]
+redis = ["dep:chronon-backend-redis", "postgres"]
+telemetry-console = []
+axum = ["dep:chronon-axum"]
+
+[dependencies]
+chronon-core = { workspace = true }
+chronon-macros = { workspace = true }
+chronon-runtime = { workspace = true }
+chronon-scheduler = { workspace = true }
+chronon-executor = { workspace = true }
+chronon-telemetry = { workspace = true }
+chronon-backend-mem = { workspace = true, optional = true }
+chronon-backend-sqlite = { workspace = true, optional = true }
+chronon-backend-postgres = { workspace = true, optional = true }
+chronon-backend-redis = { workspace = true, optional = true }
+chronon-axum = { workspace = true, optional = true }
+quark = { workspace = true }
+
+[dev-dependencies]
+chronon-backend-mem = { workspace = true }
+chronon-backend-sqlite = { workspace = true }
+chronon-backend-postgres = { workspace = true }
+chronon-backend-redis = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+http-body-util = "0.1"
+tower = { workspace = true }
+axum = { workspace = true }
+
+[[example]]
+name = "script_macro"
+required-features = ["mem"]
+
+[[example]]
+name = "script_handle_job"
+required-features = ["mem"]
+
+[[example]]
+name = "run_now"
+required-features = ["mem"]
+
+[[example]]
+name = "embedded_tick"
+required-features = ["mem"]
+
+[[example]]
+name = "store_router_boot"
+required-features = ["mem"]
+
+[[example]]
+name = "axum_host"
+required-features = ["mem", "axum"]
+
+[[example]]
+name = "sqlite_boot"
+required-features = ["sqlite"]
+
+[[example]]
+name = "postgres_boot"
+required-features = ["postgres"]
+
+[[example]]
+name = "postgres_redis_boot"
+required-features = ["postgres", "redis"]
+
+[[example]]
+name = "coordinator_daemon"
+required-features = ["postgres", "redis"]
+
+[[example]]
+name = "worker_daemon"
+required-features = ["postgres", "redis"]

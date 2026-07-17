@@ -1,0 +1,257 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_BUILD_JOBS: 1
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check (chronon facade)
+        run: |
+          cargo check -p uf-chronon --no-default-features
+          cargo check -p uf-chronon --features mem,telemetry-console
+          cargo check -p uf-chronon --features mem,telemetry-console,axum
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo clippy (workspace)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  testkit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: chronon-testkit tests
+        run: cargo test -p chronon-testkit
+
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test (workspace, excluding e2e/bench drivers)
+        run: |
+          cargo test --workspace \
+            --exclude chronon-e2e \
+            --exclude chronon-bench
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: chronon-e2e + axum (sequential)
+        run: cargo test -p chronon-e2e -p chronon-axum -- --test-threads=1
+
+  e2e-durable:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chronon
+          POSTGRES_PASSWORD: chronon
+          POSTGRES_DB: chronon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chronon"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CHRONON_POSTGRES_URL: postgres://chronon:chronon@localhost:5432/chronon
+      CHRONON_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: postgres store contract
+        run: cargo test -p chronon-backend-postgres --tests -- --include-ignored
+      - name: redis composite store contract
+        run: cargo test -p chronon-backend-redis --tests -- --include-ignored
+      - name: scheduler leader integration
+        run: cargo test -p chronon-scheduler --test leader_integration
+      - name: postgres + redis e2e matrix (--ignored)
+        # scenarios excludes distributed smokes (those live in distributed_smoke.rs).
+        run: cargo test -p chronon-e2e --test scenarios -- --ignored --test-threads=1
+      - name: postgres_boot example
+        run: cargo run -p uf-chronon --example postgres_boot --features postgres
+      - name: postgres_redis_boot example
+        run: cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis
+
+  backend-stores:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: chronon-backend-mem integration tests
+        run: cargo test -p chronon-backend-mem --tests
+      - name: chronon-backend-sqlite store contract
+        run: cargo test -p chronon-backend-sqlite --tests
+
+  coverage:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Line coverage report (workspace, exclude e2e/bench)
+        run: |
+          cargo llvm-cov --workspace \
+            --exclude chronon-e2e \
+            --exclude chronon-bench \
+            --all-features \
+            --summary-only
+          cargo llvm-cov --workspace \
+            --exclude chronon-e2e \
+            --exclude chronon-bench \
+            --all-features \
+            --lcov \
+            --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+
+  scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: chronon-scheduler integration tests
+        run: cargo test -p chronon-scheduler --tests
+
+  bench-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: BM-CH0 smoke run
+        run: |
+          cargo run -p chronon-bench -- run \
+            --experiment bm-ch0 --storage mem --deployment embedded \
+            --telemetry off --ops 50 --warmup 5
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: script_macro example
+        run: cargo run -p uf-chronon --example script_macro --features mem
+      - name: script_handle_job example
+        run: cargo run -p uf-chronon --example script_handle_job --features mem
+      - name: run_now example
+        run: cargo run -p uf-chronon --example run_now --features mem
+      - name: embedded_tick example
+        run: cargo run -p uf-chronon --example embedded_tick --features mem
+      - name: store_router_boot example
+        run: cargo run -p uf-chronon --example store_router_boot --features mem
+      - name: sqlite_boot example
+        run: cargo run -p uf-chronon --example sqlite_boot --features sqlite
+      - name: axum_host example
+        run: cargo run -p uf-chronon --example axum_host --features mem,axum
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo doc (deny warnings, workspace)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          cargo doc --workspace --no-deps
+          cargo doc -p uf-chronon --all-features --no-deps
+      - name: Rustdoc tests
+        run: |
+          cargo test --doc -p chronon-core
+          cargo test --doc -p chronon-backend-mem
+          cargo test --doc -p chronon-backend-sql-common
+          cargo test --doc -p chronon-backend-postgres
+          cargo test --doc -p chronon-backend-sqlite
+          cargo test --doc -p chronon-backend-redis
+          cargo test --doc -p chronon-runtime
+          cargo test --doc -p chronon-scheduler
+          cargo test --doc -p chronon-executor
+          cargo test --doc -p chronon-axum
+
+  machete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cargo machete
+        run: |
+          cargo install cargo-machete --locked
+          cargo machete
+
+  sentrux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Sentrux quality gate
+        run: |
+          if command -v sentrux >/dev/null 2>&1; then
+            sentrux scan
+            SIGNAL=$(sentrux health 2>&1 | grep -oP 'quality_signal[":\s]+\K[0-9]+' | head -1 || echo "0")
+            MIN=7424
+            if [ -n "$SIGNAL" ] && [ "$SIGNAL" -lt "$MIN" ]; then
+              echo "quality_signal $SIGNAL below baseline $MIN"
+              exit 1
+            fi
+            sentrux check_rules
+          else
+            echo "sentrux not installed; skipping quality gate"
+          fi

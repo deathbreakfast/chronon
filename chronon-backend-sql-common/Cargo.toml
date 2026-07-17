@@ -1,0 +1,29 @@
+[package]
+name = "chronon-backend-sql-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Shared SQL SchedulerStore for SQLite and PostgreSQL"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+chronon-core = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["sqlite", "postgres", "chrono", "json"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

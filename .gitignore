@@ -1,0 +1,11 @@
+/target/
+/target-*/
+**/*.rs.bk
+.DS_Store
+
+# Generated AWS campaign / fleet state (never commit live IPs or keys)
+infra/aws/chronon/.state/
+infra/aws/chronon/fleet-state.json
+infra/aws/chronon/scaling-fleet/instances.env
+infra/aws/chronon/scaling-fleet/instances.cells.env
+infra/aws/chronon/scaling-fleet/instance-ids.txt

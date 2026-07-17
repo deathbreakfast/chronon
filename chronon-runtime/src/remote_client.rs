@@ -1,0 +1,236 @@
+//! Generic HTTP client for remote coordinator access.
+
+use std::time::Duration;
+
+use chronon_core::models::{Job, ScheduleKind};
+use chronon_core::{ChrononError, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+const DEFAULT_TIMEOUT_MS: u64 = 3000;
+
+fn trim_slash(s: &str) -> String {
+    s.trim_end_matches('/').to_string()
+}
+
+fn remote_timeout() -> Duration {
+    let ms = std::env::var("CHRONON_REMOTE_HTTP_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_TIMEOUT_MS);
+    Duration::from_millis(ms.max(100))
+}
+
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(remote_timeout())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct UpsertJobRequest {
+    job_name: String,
+    script_name: String,
+    cron_expr: Option<String>,
+    timezone: Option<String>,
+    #[serde(default)]
+    schedule_kind: ScheduleKindDto,
+    #[serde(default)]
+    params: Value,
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default = "default_concurrency")]
+    concurrency: i32,
+    pub timeout_ms: Option<i64>,
+    #[serde(default)]
+    actor_json: Option<Value>,
+    #[serde(default)]
+    retry_policy: Option<Value>,
+    #[serde(default)]
+    misfire_policy: Option<Value>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_concurrency() -> i32 {
+    1
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+enum ScheduleKindDto {
+    #[default]
+    Cron,
+    RunOnce,
+    Manual,
+}
+
+impl From<ScheduleKind> for ScheduleKindDto {
+    fn from(k: ScheduleKind) -> Self {
+        match k {
+            ScheduleKind::Cron => ScheduleKindDto::Cron,
+            ScheduleKind::RunOnce => ScheduleKindDto::RunOnce,
+            ScheduleKind::Manual => ScheduleKindDto::Manual,
+        }
+    }
+}
+
+/// Non-sensitive job summary returned by remote `GET /jobs` (matches Axum `JobResponse`).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct JobSummary {
+    /// Stable job identifier (UUID).
+    pub job_id: String,
+    /// Human-readable name.
+    pub job_name: String,
+    /// Bound script name.
+    pub script_name: String,
+    /// Whether scheduling is active.
+    pub enabled: bool,
+    /// Schedule mode as snake_case string (`cron`, `run_once`, `manual`).
+    pub schedule_kind: String,
+    /// Cron string when applicable.
+    pub cron_expr: Option<String>,
+    /// Timezone used for cron.
+    pub timezone: Option<String>,
+    /// Next scheduled fire time (RFC3339) when known.
+    pub next_run_at: Option<String>,
+    /// Monotonic revision counter.
+    pub current_revision: i32,
+    /// Creation timestamp (RFC3339).
+    pub created_at: String,
+    /// Last upsert timestamp (RFC3339).
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct JobResponse {
+    job_id: String,
+    job_name: String,
+    script_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JobActionRequest {
+    job_id: String,
+    #[serde(default)]
+    params: Option<Value>,
+}
+
+/// HTTP-backed coordinator for split deployments (no local tick/worker loops).
+///
+/// Targets the `chronon-axum` API at `{base_url}/api/chronon/*`. Pair with
+/// [`DeploymentShape::RemoteClient`](crate::DeploymentShape::RemoteClient) on the worker host.
+pub struct RemoteCoordinatorClient {
+    base_url: String,
+    client: reqwest::Client,
+}
+
+impl RemoteCoordinatorClient {
+    /// `base_url` is trimmed of trailing slashes; timeout from `CHRONON_REMOTE_HTTP_TIMEOUT_MS` (default 3s).
+    pub fn new(base_url: impl Into<String>) -> Self {
+        Self {
+            base_url: trim_slash(&base_url.into()),
+            client: http_client(),
+        }
+    }
+
+    fn api_url(&self, path: &str) -> String {
+        format!("{}/api/chronon{}", self.base_url, path)
+    }
+
+    async fn parse_response<T: for<'de> Deserialize<'de>>(
+        resp: reqwest::Response,
+    ) -> Result<T> {
+        let status = resp.status();
+        let body: ApiResponse<T> = resp
+            .json()
+            .await
+            .map_err(|e| ChrononError::Internal(format!("remote decode: {e}")))?;
+        if !status.is_success() || !body.success {
+            return Err(ChrononError::Internal(
+                body.error.unwrap_or_else(|| format!("HTTP {status}")),
+            ));
+        }
+        body.data
+            .ok_or_else(|| ChrononError::Internal("remote empty data".into()))
+    }
+
+    /// POST `/jobs/upsert` with fields from `job`.
+    pub async fn upsert_job(&self, job: Job) -> Result<()> {
+        let req = UpsertJobRequest {
+            job_name: job.job_name,
+            script_name: job.script_name,
+            cron_expr: job.cron_expr,
+            timezone: job.timezone,
+            schedule_kind: job.schedule_kind.into(),
+            params: job.params_json,
+            enabled: job.enabled,
+            concurrency: job.concurrency,
+            timeout_ms: job.timeout_ms,
+            actor_json: Some(job.actor_json),
+            retry_policy: Some(job.retry_policy_json),
+            misfire_policy: Some(job.misfire_policy_json),
+        };
+        let _: JobResponse = Self::parse_response(
+            self.client
+                .post(self.api_url("/jobs/upsert"))
+                .json(&req)
+                .send()
+                .await
+                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// GET `/jobs` and return non-sensitive job summaries.
+    pub async fn list_jobs(&self) -> Result<Vec<JobSummary>> {
+        Self::parse_response(
+            self.client
+                .get(self.api_url("/jobs"))
+                .send()
+                .await
+                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+        )
+        .await
+    }
+
+    /// POST `/jobs/run_now` and return the enqueued `run_id`.
+    pub async fn run_now(&self, job_id: &str) -> Result<String> {
+        let req = JobActionRequest {
+            job_id: job_id.to_string(),
+            params: None,
+        };
+        let resp: String = Self::parse_response(
+            self.client
+                .post(self.api_url("/jobs/run_now"))
+                .json(&req)
+                .send()
+                .await
+                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+        )
+        .await?;
+        Ok(resp)
+    }
+}
+
+/// Resolve remote base URL from `CHRONON_REMOTE_BASE_URL` when set and non-empty.
+pub fn resolve_remote_base_url() -> Option<String> {
+    if let Ok(u) = std::env::var("CHRONON_REMOTE_BASE_URL") {
+        let t = u.trim();
+        if !t.is_empty() {
+            return Some(trim_slash(t));
+        }
+    }
+    None
+}

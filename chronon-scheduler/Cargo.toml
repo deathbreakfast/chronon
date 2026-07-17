@@ -1,0 +1,28 @@
+[package]
+name = "chronon-scheduler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Scheduler tick loop and due-job queries for Chronon"
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+chronon-core = { workspace = true }
+chronon-telemetry = { workspace = true }
+croner = { workspace = true }
+chrono-tz = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+chronon-backend-mem = { workspace = true }

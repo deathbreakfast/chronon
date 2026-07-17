@@ -1,0 +1,21 @@
+[package]
+name = "chronon-backend-mem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "In-memory SchedulerStore adapter for Chronon"
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+chronon-core = { workspace = true }
+tokio = { workspace = true }

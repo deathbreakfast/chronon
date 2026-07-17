@@ -1,0 +1,37 @@
+[package]
+name = "chronon-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Performance CLI for Chronon benchmark experiments"
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "chronon-bench"
+path = "src/main.rs"
+
+[lib]
+name = "chronon_bench"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+chronon-core = { workspace = true }
+chronon-scheduler = { workspace = true }
+chronon-telemetry = { workspace = true }
+chronon-testkit = { workspace = true }
+chrono-tz = { workspace = true }
+clap = { workspace = true }
+croner = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+chronon-testkit = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
