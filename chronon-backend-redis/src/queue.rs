@@ -10,6 +10,28 @@ use redis::AsyncCommands;
 use tokio::sync::Mutex;
 
 /// Redis ZSET layer for queued runs (`{prefix}:ready:{pool}` or hash-tagged for cluster).
+///
+/// Used only as the claim hot path inside [`crate::PostgresRedisSchedulerStore`] — not a
+/// standalone [`SchedulerStore`](chronon_core::SchedulerStore). Connect with [`Self::connect`]:
+///
+/// | Knob | Effect |
+/// |------|--------|
+/// | `url` / `CHRONON_REDIS_URL` | Standalone Redis |
+/// | `CHRONON_REDIS_CLUSTER_URLS` | Comma-separated cluster nodes |
+/// | `CHRONON_REDIS_HASH_TAGS=1` | Hash-tagged pool keys for slot affinity |
+/// | `key_prefix` (default `chronon`) | Key namespace |
+///
+/// # Examples
+///
+/// ```no_run
+/// use chronon_backend_redis::RedisQueueLayer;
+///
+/// # async fn demo() -> chronon_core::Result<()> {
+/// let redis = RedisQueueLayer::connect("redis://127.0.0.1:6379", Some("myapp")).await?;
+/// # let _ = redis;
+/// # Ok(())
+/// # }
+/// ```
 pub struct RedisQueueLayer {
     single: Option<ConnectionManager>,
     cluster: Option<Arc<Mutex<redis::cluster_async::ClusterConnection>>>,

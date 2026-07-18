@@ -19,6 +19,30 @@ use chronon_core::models::{
 pub const LEADER_ROW_ID: &str = "singleton";
 
 /// Thread-safe in-memory persistence for jobs, runs, and coordinator metadata.
+///
+/// Process-local and **non-durable** — suitable for Mode 1 embedded experiments, unit tests,
+/// examples, and benchmarks. Do **not** share across processes; use SQLite or Postgres for
+/// durable / Mode 2 topologies.
+///
+/// Enable the facade `mem` feature to re-export this type from `chronon`. Wire with
+/// `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new()))` or
+/// [`crate::install_default_mem_store`].
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use chronon_backend_mem::InMemorySchedulerStore;
+/// use chronon_core::{Job, SchedulerStore};
+///
+/// # #[tokio::main]
+/// # async fn main() -> chronon_core::Result<()> {
+/// let store = Arc::new(InMemorySchedulerStore::new());
+/// store.upsert_job(&Job::new("demo", "noop")).await?;
+/// assert_eq!(store.list_jobs().await?.len(), 1);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Default)]
 pub struct InMemorySchedulerStore {
     /// Jobs keyed by [`Job::job_id`].

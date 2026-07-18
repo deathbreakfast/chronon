@@ -210,7 +210,7 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: |
-          cargo doc --workspace --no-deps
+          cargo doc --workspace --exclude uf-chronon --no-deps
           cargo doc -p uf-chronon --all-features --no-deps
       - name: Rustdoc tests
         run: |

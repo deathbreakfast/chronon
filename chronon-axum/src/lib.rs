@@ -12,6 +12,12 @@
 //!
 //! All responses use the [`ApiResponse`] envelope (`success`, `data`, `error`).
 //! [`UpsertJobRequest::script_name`] must exist in the registry or upsert returns 400.
+//!
+//! # Mode 3 (remote clients)
+//!
+//! Mount this router on a Mode 1 or Mode 2 coordinator host, then point
+//! [`chronon_runtime::RemoteCoordinatorClient`] at `{base_url}` (paths under
+//! [`API_PREFIX`]). See the `chronon` facade getting-started Mode 3 section.
 
 mod dto;
 mod handlers;
@@ -36,7 +42,8 @@ pub const API_PREFIX: &str = "/api/chronon";
 
 /// Create the Chronon API router with job, run, and script routes.
 ///
-/// Host state `S` must implement [`FromRef<S>`] for [`ChrononState`].
+/// Host state `S` must implement [`FromRef<S>`] for [`ChrononState`]. Nest under
+/// [`API_PREFIX`] (`/api/chronon`) so [`chronon_runtime::RemoteCoordinatorClient`] paths match.
 ///
 /// # Examples
 ///
@@ -90,6 +97,8 @@ pub const API_PREFIX: &str = "/api/chronon";
 /// assert_eq!(resp.status(), StatusCode::OK);
 /// # }
 /// ```
+///
+/// Runnable: `cargo run -p uf-chronon --example axum_host --features mem,axum`.
 pub fn chronon_router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,

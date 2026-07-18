@@ -33,7 +33,7 @@ Do **not** depend on this crate from application binaries — use the facade fea
 
 ## Schema
 
-Tables and indexes bootstrap on connect via [`ensure_schema`](https://docs.rs/chronon-backend-sql-common/latest/chronon_backend_sql_common/schema/fn.ensure_schema.html). No manual migration step in v0.1.0.
+Tables and indexes bootstrap on connect via [`ensure_schema`](https://docs.rs/chronon-backend-sql-common/latest/chronon_backend_sql_common/schema/fn.ensure_schema.html). No manual migration step in v0.1.1.
 
 ## Documentation
 

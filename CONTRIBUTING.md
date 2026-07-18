@@ -19,7 +19,8 @@ cargo check -p uf-chronon --features mem,telemetry-console,axum
 cargo deny check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo machete
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc -p uf-chronon --all-features --no-deps
 cargo test --doc -p chronon-core
 cargo test --doc -p chronon-backend-mem
 cargo test --doc -p chronon-backend-sql-common
@@ -71,10 +72,11 @@ File SLOC is enforced via Sentrux + review judgment (no repo scripts). Use local
 
 ### Rustdoc
 
-- `//!` landing pages on crate and submodule roots (getting started, documentation map, modules)
+- `//!` landing pages on crate and submodule roots (getting started, guided modes, modules)
 - `///` on every public item you add or change; add `# Examples` on major entry points
 - No `#![allow(missing_docs)]` without explicit approval
-- Verify: `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` and `cargo test --doc` on crates with examples
+- Verify: `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps`, then `cargo doc -p uf-chronon --all-features --no-deps`, and `cargo test --doc` on crates with examples
+- Facade links feature-gated types; always document `uf-chronon` with `--all-features` (also set in `[package.metadata.docs.rs]`)
 
 ### Lint policy
 
@@ -106,7 +108,8 @@ Lower layers must not import testkit, e2e, or bench crates.
 - [ ] `cargo test -p chronon-e2e -p chronon-axum -- --test-threads=1`: all pass
 - [ ] `./scripts/coverage.sh --summary-only`: no unexpected regression
 - [ ] `cargo machete`: no unused deps
-- [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`: clean
+- [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps`: clean
+- [ ] `RUSTDOCFLAGS="-D warnings" cargo doc -p uf-chronon --all-features --no-deps`: clean
 - [ ] `cargo test --doc` on core/runtime/scheduler/executor/axum/backend-{mem,sql-common,postgres,sqlite,redis}: pass
 - [ ] No file > 450 SLOC (code only) without splitting
 - [ ] No new function with CC > 25

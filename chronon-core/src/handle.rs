@@ -13,6 +13,9 @@ use crate::Result;
 /// function into a handle factory (`fn nightly_cleanup() -> ScriptHandle<…>`) and
 /// moves the body to an internal `__*_impl` entry point used by the executor.
 ///
+/// After building a [`Job`], set [`crate::ScheduleKind`] / cron fields and upsert via
+/// `CoordinatorService` (Mode 1–2) or `RemoteCoordinatorClient` (Mode 3).
+///
 /// # Examples
 ///
 /// Build a default [`Job`] from the macro-generated handle, then upsert it:

@@ -14,8 +14,9 @@ alwaysApply: true
 3. `cargo clippy --workspace --all-targets -- -D warnings`
 4. `cargo test --workspace`
 5. `cargo machete` — no unused deps
-6. `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps`
-7. `cargo test --doc` on crates with `# Examples` (core, backend-mem, runtime, scheduler, executor, axum)
+6. `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps`
+7. `RUSTDOCFLAGS="-D warnings" cargo doc -p uf-chronon --all-features --no-deps`
+8. `cargo test --doc` on crates with `# Examples` (core, backend-mem, runtime, scheduler, executor, axum)
 
 ## Module discipline
 
@@ -26,9 +27,10 @@ alwaysApply: true
 
 ## Rustdoc
 
-- `//!` landing pages on crate/submodule roots (getting started, documentation map)
+- `//!` landing pages on crate/submodule roots (getting started, guided modes)
 - `///` on every public item; `# Examples` on major entry points
 - No `#![allow(missing_docs)]` without explicit approval
+- Facade (`uf-chronon`) has no default features — document it with `--all-features` so backend/`axum` links resolve
 
 ## Lint policy
 

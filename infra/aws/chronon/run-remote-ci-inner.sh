@@ -94,7 +94,7 @@ cargo run -p uf-chronon --example sqlite_boot --features sqlite
 cargo run -p uf-chronon --example axum_host --features mem,axum
 
 echo "=== docs ==="
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps
 RUSTDOCFLAGS="-D warnings" cargo doc -p uf-chronon --all-features --no-deps
 cargo test --doc -p chronon-core
 cargo test --doc -p chronon-backend-mem

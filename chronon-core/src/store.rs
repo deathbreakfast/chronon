@@ -10,9 +10,19 @@ use crate::models::{
 
 /// Async persistence port for jobs, runs, revisions, and coordinator metadata.
 ///
-/// Hosts provide one implementation per storage substrate (mem, SQL, etc.). The scheduler,
-/// executor, and HTTP API call these methods; implementations must be `Send + Sync` for
-/// shared use across Tokio tasks.
+/// Hosts provide one implementation per storage substrate. The scheduler, executor, and
+/// HTTP API call these methods; implementations must be `Send + Sync` for shared use across
+/// Tokio tasks.
+///
+/// | Adapter | Facade feature | Topology fit |
+/// |---------|----------------|--------------|
+/// | `InMemorySchedulerStore` | `mem` | Mode 1 local / tests (not multi-process) |
+/// | `SqliteSchedulerStore` | `sqlite` | Mode 1 single-host durable |
+/// | `PostgresSchedulerStore` | `postgres` | Mode 2 shared durable |
+/// | `PostgresRedisSchedulerStore` | `postgres,redis` | Mode 2 production claim path |
+///
+/// Inject via `ChrononBuilder::scheduler_store` (or [`crate::StoreRouter`] +
+/// `scheduler_store_from_global`). Custom adapters implement this trait in a separate crate.
 ///
 /// # Contract
 ///
@@ -20,6 +30,24 @@ use crate::models::{
 /// - Run claims must be atomic: at most one worker holds a claimed run at a time.
 /// - Tick claims prevent duplicate enqueue when coordinators race on the same job.
 /// - Leader election uses a singleton row with TTL renewal semantics.
+///
+/// # Examples
+///
+/// Trait-object usage (pass any adapter that implements the port):
+///
+/// ```
+/// use std::sync::Arc;
+/// use chronon_core::{Job, SchedulerStore};
+///
+/// async fn seed(store: Arc<dyn SchedulerStore>) -> chronon_core::Result<()> {
+///     store.upsert_job(&Job::new("demo", "noop")).await?;
+///     assert_eq!(store.list_jobs().await?.len(), 1);
+///     Ok(())
+/// }
+/// ```
+///
+/// Concrete adapters and runnable boots live in `chronon-backend-mem` / `-sqlite` /
+/// `-postgres` / `-redis` and the `uf-chronon` examples (`sqlite_boot`, `postgres_boot`, …).
 #[async_trait]
 pub trait SchedulerStore: Send + Sync {
     // --- Jobs ---

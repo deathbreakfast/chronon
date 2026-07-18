@@ -4,16 +4,44 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// How the job is scheduled.
+/// How a [`Job`] becomes due for enqueue.
+///
+/// | Variant | Due via tick? | Required fields | Typical trigger |
+/// |---------|---------------|-----------------|-----------------|
+/// | [`Self::Cron`] | Yes | `cron_expr` (+ optional `timezone`) | Recurring schedules |
+/// | [`Self::RunOnce`] | Yes | `next_run_at` or `run_once_at` | One-shot deferred work |
+/// | [`Self::Manual`] | **No** | — | `CoordinatorService::run_now` or HTTP `POST /jobs/run_now` |
+///
+/// Persist via coordinator upsert; cron next-fire is computed there when
+/// `schedule_kind == Cron`. See the `chronon` facade getting-started §5.
+///
+/// # Examples
+///
+/// ```
+/// use chronon_core::{Job, ScheduleKind};
+///
+/// let mut cron = Job::new("nightly", "cleanup");
+/// cron.schedule_kind = ScheduleKind::Cron;
+/// cron.cron_expr = Some("0 2 * * *".into());
+/// cron.timezone = Some("UTC".into());
+///
+/// let mut once = Job::new("migrate-once", "migrate");
+/// once.schedule_kind = ScheduleKind::RunOnce;
+/// once.next_run_at = Some(chrono::Utc::now());
+///
+/// let mut manual = Job::new("cleanup-now", "cleanup");
+/// manual.schedule_kind = ScheduleKind::Manual;
+/// assert_eq!(manual.schedule_kind, ScheduleKind::Manual);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ScheduleKind {
-    /// Recurring cron schedule.
+    /// Recurring cron schedule — set [`Job::cron_expr`] and optional [`Job::timezone`].
     #[default]
     Cron,
-    /// One-time execution at a specific time.
+    /// One-time execution when [`Job::next_run_at`] / [`Job::run_once_at`] is due.
     RunOnce,
-    /// Manual execution only (no automatic scheduling).
+    /// Never due for the tick loop — enqueue only via `run_now` (in-process or HTTP).
     Manual,
 }
 
@@ -82,9 +110,34 @@ pub struct MisfirePolicy {
     pub max_misfire_window_secs: u64,
 }
 
-/// A scheduled job configuration.
+/// Scheduled work unit: binds a **script name** to a [`ScheduleKind`] and params.
 ///
-/// Jobs reference a script and define when/how it should run.
+/// Create with [`Job::new`], set schedule fields, then persist with
+/// `CoordinatorService::upsert_job` (or HTTP upsert / `RemoteCoordinatorClient`).
+/// Typed defaults: [`crate::ScriptHandle`].
+///
+/// | Field group | Purpose |
+/// |-------------|---------|
+/// | `script_name` / `params_json` | What to run and with which args |
+/// | `schedule_kind` + cron / run-once fields | When it becomes due |
+/// | `actor_json` | Identity restored by [`crate::ContextFactory`] at dispatch |
+/// | `pool` / placement | Worker pool targeting in split deployments |
+///
+/// # Examples
+///
+/// ```
+/// use chronon_core::{Job, ScheduleKind};
+///
+/// let mut job = Job::new("nightly-cleanup", "nightly_cleanup");
+/// job.schedule_kind = ScheduleKind::Cron;
+/// job.cron_expr = Some("0 2 * * *".into());
+/// job.timezone = Some("UTC".into());
+/// job.params_json = serde_json::json!({ "retention_days": 7 });
+/// assert!(job.enabled);
+/// assert_eq!(job.script_name, "nightly_cleanup");
+/// ```
+///
+/// Runnable: `cargo run -p uf-chronon --example script_macro --features mem`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     /// Unique identifier (UUID).
@@ -181,11 +234,23 @@ pub struct Job {
 }
 
 impl Job {
-    /// Create a baseline job record with generated IDs and defaults.
+    /// Baseline job with generated `job_id`, `enabled = true`, and
+    /// [`ScheduleKind::Cron`] (no expression yet).
     ///
-    /// This constructor intentionally leaves identity and advanced scheduling
-    /// fields in default/empty form. Populate cron, actor, and params fields
-    /// before persistence (via coordinator service, HTTP upsert API, or direct store calls).
+    /// Populate `schedule_kind`, cron / run-once fields, `params_json`, and
+    /// `actor_json` before upsert. Prefer [`crate::ScriptHandle::job`] /
+    /// [`crate::ScriptHandle::job_with_params`] when the script macro is in use.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chronon_core::Job;
+    ///
+    /// let job = Job::new("demo", "noop");
+    /// assert!(!job.job_id.is_empty());
+    /// assert_eq!(job.job_name, "demo");
+    /// assert_eq!(job.script_name, "noop");
+    /// ```
     pub fn new(job_name: impl Into<String>, script_name: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
