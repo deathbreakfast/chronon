@@ -1,7 +1,12 @@
 //! `PostgreSQL` [`SchedulerStore`](chronon_core::store::SchedulerStore) for Chronon.
 //!
-//! **Audience:** backend engineers deploying shared durable storage for production
-//! coordinator–worker clusters.
+//! **When to use:** shared durable storage for **Mode 1** or **Mode 2** coordinator–worker
+//! clusters. For higher claim throughput, wrap with `PostgresRedisSchedulerStore`
+//! (`chronon-backend-redis`).
+//!
+//! Getting started:
+//! [Mode 1](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary) /
+//! [Mode 2](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-2--coordinator--worker-two-binaries).
 //!
 //! ## Stack position
 //!
@@ -15,19 +20,68 @@
 //! - [`PostgresSchedulerStore::connect_isolated`] — isolated schema for parallel tests
 //! - [`postgres_test_url`] — resolve test URL from `CHRONON_POSTGRES_URL` / `CHRONON_TEST_POSTGRES_URL`
 //!
-//! ## Example
+//! ## Mode 1 — Embedded
 //!
-//! ```rust,no_run
-//! use chronon_backend_postgres::PostgresSchedulerStore;
+//! ```ignore
+//! use std::sync::Arc;
+//! use chronon::prelude::*;
+//! use chronon::PostgresSchedulerStore;
 //!
-//! # async fn example() -> chronon_core::Result<()> {
-//! let store = PostgresSchedulerStore::connect(
-//!     "postgres://user:pass@localhost/chronon",
-//! )
-//! .await?;
-//! # Ok(())
-//! # }
+//! let url = std::env::var("CHRONON_POSTGRES_URL")?;
+//! let store = PostgresSchedulerStore::connect(&url).await?;
+//! let chronon = ChrononBuilder::new()
+//!     .scheduler_store(Arc::new(store))
+//!     .context_factory(Arc::new(JsonScriptContextFactory))
+//!     .embedded()
+//!     .auto_registry()
+//!     .build()?;
 //! ```
+//!
+//! Runnable: `cargo run -p uf-chronon --example postgres_boot --features postgres`
+//!
+//! ## Mode 2 — Coordinator binary
+//!
+//! Shared `CHRONON_POSTGRES_URL` with workers. Tick only:
+//!
+//! ```ignore
+//! use std::sync::Arc;
+//! use chronon::prelude::*;
+//! use chronon::PostgresSchedulerStore;
+//!
+//! let url = std::env::var("CHRONON_POSTGRES_URL")?;
+//! let store = PostgresSchedulerStore::connect(&url).await?;
+//! let mut chronon = ChrononBuilder::new()
+//!     .scheduler_store(Arc::new(store))
+//!     .context_factory(Arc::new(JsonScriptContextFactory))
+//!     .instance_id("coordinator-0")
+//!     .coordinator_only()
+//!     .build()?;
+//! chronon.scheduler.init_partitions().await;
+//! chronon.run().await?;
+//! ```
+//!
+//! ## Mode 2 — Worker binary
+//!
+//! Same Postgres URL, unique `CHRONON_INSTANCE_ID`, scripts via `.auto_registry()`:
+//!
+//! ```ignore
+//! use std::sync::Arc;
+//! use chronon::prelude::*;
+//! use chronon::PostgresSchedulerStore;
+//!
+//! let url = std::env::var("CHRONON_POSTGRES_URL")?;
+//! let store = PostgresSchedulerStore::connect(&url).await?;
+//! let mut chronon = ChrononBuilder::new()
+//!     .scheduler_store(Arc::new(store))
+//!     .context_factory(Arc::new(JsonScriptContextFactory))
+//!     .instance_id(std::env::var("CHRONON_INSTANCE_ID").unwrap_or_else(|_| "worker-1".into()))
+//!     .auto_registry()
+//!     .worker("general")
+//!     .build()?;
+//! chronon.run().await?;
+//! ```
+//!
+//! Production claim path: [Postgres + Redis](../chronon_backend_redis/index.html#mode-2--coordinator-binary).
 
 mod bootstrap;
 
@@ -38,6 +92,34 @@ use sqlx::PgPool;
 pub use bootstrap::{postgres_store_from_env, postgres_test_url};
 
 /// PostgreSQL-backed scheduler store.
+///
+/// Shared durable storage for Mode 2 coordinator–worker clusters (and Mode 1 when you already
+/// run Postgres). Pass a connection URL to [`Self::connect`]; daemons often use
+/// `CHRONON_POSTGRES_URL` / [`postgres_test_url`].
+///
+/// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /
+/// [worker](index.html#mode-2--worker-binary).
+///
+/// For higher claim throughput, wrap with `PostgresRedisSchedulerStore` from
+/// `chronon-backend-redis` (`postgres` + `redis` features). Enable the facade `postgres`
+/// feature to re-export this type.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use chronon_backend_postgres::PostgresSchedulerStore;
+///
+/// # async fn example() -> chronon_core::Result<()> {
+/// let store = PostgresSchedulerStore::connect(
+///     "postgres://user:pass@localhost/chronon",
+/// )
+/// .await?;
+/// # let _ = store;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Runnable: `cargo run -p uf-chronon --example postgres_boot --features postgres`.
 pub struct PostgresSchedulerStore {
     inner: SqlSchedulerStore,
 }

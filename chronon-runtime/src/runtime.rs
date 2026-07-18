@@ -16,8 +16,34 @@ use crate::worker::run_worker_loop;
 
 /// Assembled Chronon runtime: store, scheduler, executor, and deployment loops.
 ///
-/// Built via [`ChrononBuilder`](crate::ChrononBuilder). Hosts typically spawn
-/// [`Chronon::run`] on a background task and call [`Chronon::shutdown`] on exit.
+/// Built via [`ChrononBuilder`](crate::ChrononBuilder). Hosts typically:
+///
+/// 1. Upsert jobs through [`Self::coordinator_service`] (or HTTP / remote client).
+/// 2. Call [`Self::run`] to start shape-specific loops (or [`Self::tick_once`] in tests).
+/// 3. Call [`Self::shutdown`] on exit.
+///
+/// | [`DeploymentShape`](crate::DeploymentShape) | [`Self::run`] behavior |
+/// |---------------------------------------------|------------------------|
+/// | `Embedded` | Tick + worker in this process |
+/// | `CoordinatorOnly` | Tick + partitions only |
+/// | `Worker(pool)` | Claim + execute for `pool` |
+/// | `RemoteClient(_)` | **Error** — use [`crate::RemoteCoordinatorClient`] |
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use chronon_backend_mem::InMemorySchedulerStore;
+/// use chronon_runtime::{ChrononBuilder, DeploymentShape};
+///
+/// let chronon = ChrononBuilder::new()
+///     .scheduler_store(Arc::new(InMemorySchedulerStore::new()))
+///     .embedded()
+///     .build()
+///     .unwrap();
+/// assert_eq!(chronon.deployment, DeploymentShape::Embedded);
+/// let _ = chronon.coordinator_service();
+/// ```
 pub struct Chronon {
     /// Shared persistence for jobs, runs, partitions, and workers.
     pub store: Arc<dyn SchedulerStore>,
@@ -66,7 +92,41 @@ impl Chronon {
 
     /// Run deployment loops until [`Self::shutdown`] is called.
     ///
-    /// Returns an error for [`DeploymentShape::RemoteClient`] because no local loops apply.
+    /// Dispatches on [`Self::deployment`]:
+    ///
+    /// - [`DeploymentShape::Embedded`](crate::DeploymentShape::Embedded) — tick + worker
+    /// - [`DeploymentShape::CoordinatorOnly`](crate::DeploymentShape::CoordinatorOnly) — tick only
+    /// - [`DeploymentShape::Worker`](crate::DeploymentShape::Worker) — claim + execute
+    /// - [`DeploymentShape::RemoteClient`](crate::DeploymentShape::RemoteClient) — returns
+    ///   [`ChrononError::Internal`](chronon_core::ChrononError::Internal); use
+    ///   [`crate::RemoteCoordinatorClient`] instead
+    ///
+    /// Call `scheduler.init_partitions().await` before [`Self::run`] on coordinator /
+    /// embedded shapes so partition ownership is ready.
+    ///
+    /// # Examples
+    ///
+    /// Embedded: init partitions, then run until shutdown:
+    ///
+    /// ```no_run
+    /// use std::sync::Arc;
+    /// use chronon_backend_mem::InMemorySchedulerStore;
+    /// use chronon_runtime::ChrononBuilder;
+    ///
+    /// # async fn demo() -> chronon_core::Result<()> {
+    /// let mut chronon = ChrononBuilder::new()
+    ///     .scheduler_store(Arc::new(InMemorySchedulerStore::new()))
+    ///     .embedded()
+    ///     .build()?;
+    /// chronon.scheduler.init_partitions().await;
+    /// // chronon.run().await?;  // blocks until chronon.shutdown()
+    /// # let _ = chronon;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Runnable daemons: `cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis`
+    /// and `worker_daemon`.
     pub async fn run(&mut self) -> chronon_core::Result<()> {
         if let Some(rx) = self.event_rx.take() {
             spawn_event_handler(Arc::clone(&self.store), rx);

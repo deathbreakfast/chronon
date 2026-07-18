@@ -126,17 +126,52 @@ struct JobActionRequest {
     params: Option<Value>,
 }
 
-/// HTTP-backed coordinator for split deployments (no local tick/worker loops).
+/// HTTP client for Mode 3 — schedule/trigger jobs without local Chronon loops.
 ///
-/// Targets the `chronon-axum` API at `{base_url}/api/chronon/*`. Pair with
-/// [`DeploymentShape::RemoteClient`](crate::DeploymentShape::RemoteClient) on the worker host.
+/// Targets the `chronon-axum` API at `{base_url}/api/chronon/*` (see `API_PREFIX`).
+/// Pair with a host that mounts `chronon_router` on a Mode 1 or Mode 2 coordinator process.
+///
+/// | Method | HTTP |
+/// |--------|------|
+/// | [`Self::upsert_job`] | `POST /jobs/upsert` |
+/// | [`Self::list_jobs`] | `GET /jobs` |
+/// | [`Self::run_now`] | `POST /jobs/run_now` |
+///
+/// Timeout: `CHRONON_REMOTE_HTTP_TIMEOUT_MS` (default 3000, minimum 100). Base URL helper:
+/// [`resolve_remote_base_url`]. Optional builder mark: [`crate::ChrononBuilder::remote_coordinator`]
+/// ([`DeploymentShape::RemoteClient`](crate::DeploymentShape::RemoteClient)) so you do not call
+/// [`crate::Chronon::run`] by mistake.
+///
+/// # Examples
+///
+/// ```no_run
+/// use chronon_core::{Job, ScheduleKind};
+/// use chronon_runtime::{resolve_remote_base_url, RemoteCoordinatorClient};
+///
+/// # async fn demo() -> chronon_core::Result<()> {
+/// let base = resolve_remote_base_url()
+///     .unwrap_or_else(|| "http://127.0.0.1:8080".into());
+/// let client = RemoteCoordinatorClient::new(base);
+///
+/// let mut job = Job::new("remote-job", "nightly_cleanup");
+/// job.schedule_kind = ScheduleKind::Manual;
+/// client.upsert_job(job.clone()).await?;
+/// let _run_id = client.run_now(&job.job_id).await?;
+/// let _jobs = client.list_jobs().await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Runnable API mount sketch: `cargo run -p uf-chronon --example axum_host --features mem,axum`.
 pub struct RemoteCoordinatorClient {
     base_url: String,
     client: reqwest::Client,
 }
 
 impl RemoteCoordinatorClient {
-    /// `base_url` is trimmed of trailing slashes; timeout from `CHRONON_REMOTE_HTTP_TIMEOUT_MS` (default 3s).
+    /// Create a client for `base_url` (trailing slashes stripped).
+    ///
+    /// Timeout from `CHRONON_REMOTE_HTTP_TIMEOUT_MS` (default 3s).
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
             base_url: trim_slash(&base_url.into()),
@@ -224,7 +259,22 @@ impl RemoteCoordinatorClient {
     }
 }
 
-/// Resolve remote base URL from `CHRONON_REMOTE_BASE_URL` when set and non-empty.
+/// Resolve remote API base URL from `CHRONON_REMOTE_BASE_URL`.
+///
+/// Returns [`None`] when unset or whitespace-only. Non-empty values are trimmed and
+/// trailing `/` is stripped — pass the result to [`RemoteCoordinatorClient::new`] or
+/// [`crate::ChrononBuilder::remote_coordinator`].
+///
+/// # Examples
+///
+/// ```
+/// use chronon_runtime::{resolve_remote_base_url, RemoteCoordinatorClient};
+///
+/// let base = resolve_remote_base_url()
+///     .unwrap_or_else(|| "http://127.0.0.1:8080".into());
+/// let client = RemoteCoordinatorClient::new(base);
+/// let _ = client; // call upsert_job / run_now / list_jobs against a live API host
+/// ```
 pub fn resolve_remote_base_url() -> Option<String> {
     if let Ok(u) = std::env::var("CHRONON_REMOTE_BASE_URL") {
         let t = u.trim();

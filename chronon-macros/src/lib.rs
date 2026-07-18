@@ -39,9 +39,15 @@ mod script_validate;
 /// - `name` attribute is required and must be unique
 /// - Parameters after `ScriptContext` must be simple identifiers
 ///
+/// Boot with `ChrononBuilder::auto_registry()` so inventory discovers the handler. In Mode 2,
+/// link scripts into **worker** binaries. Prefer `chronon_core::ScriptHandle` for typed job
+/// defaults; see the `chronon` facade getting-started §4–5.
+///
 /// # Examples
 ///
 /// ```ignore
+/// use chronon::prelude::*;
+///
 /// #[chronon::script(name = "nightly_cleanup")]
 /// async fn nightly_cleanup(
 ///     ctx: Box<dyn ScriptContext>,
@@ -51,6 +57,9 @@ mod script_validate;
 ///     Ok(())
 /// }
 /// ```
+///
+/// Runnable: `cargo run -p uf-chronon --example script_macro --features mem`
+/// and `script_handle_job`.
 #[proc_macro_attribute]
 pub fn script(attr: TokenStream, item: TokenStream) -> TokenStream {
     script::script_impl(attr, item)

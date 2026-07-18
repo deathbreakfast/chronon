@@ -21,8 +21,30 @@ fn global_router() -> &'static RwLock<StoreRouter> {
 
 /// Registers named [`SchedulerStore`] backends at host boot.
 ///
+/// Use for multi-store hosts or a single default via [`DEFAULT_STORE_NAME`]. Typical Mode 1
+/// flow:
+///
+/// 1. [`Self::register_global`] (or `install_default_mem_store` from the mem backend).
+/// 2. `ChrononBuilder::scheduler_store_from_global()`.
+///
+/// Prefer passing a store directly to `ChrononBuilder::scheduler_store` in Mode 2/3 when each
+/// binary already shares connection URLs — the global router is optional convenience for
+/// single-process boots, not a substitute for a shared durable database.
+///
 /// Thread-safe when accessed through [`Self::register_global`] / [`default_store_from_global`];
 /// direct mutation requires exclusive access to the router instance.
+///
+/// # Examples
+///
+/// ```
+/// # use std::sync::Arc;
+/// # use chronon_core::{SchedulerStore, StoreRouter, DEFAULT_STORE_NAME};
+/// # fn demo(store: Arc<dyn SchedulerStore>) {
+/// StoreRouter::register_global(DEFAULT_STORE_NAME, store);
+/// # }
+/// ```
+///
+/// Runnable end-to-end: `cargo run -p uf-chronon --example store_router_boot --features mem`.
 #[derive(Default)]
 pub struct StoreRouter {
     stores: HashMap<String, Arc<dyn SchedulerStore>>,

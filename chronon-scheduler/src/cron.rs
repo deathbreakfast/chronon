@@ -5,6 +5,28 @@ use chrono_tz::Tz;
 use chronon_core::{ChrononError, Result};
 
 /// A parsed cron expression ready for next-run calculations.
+///
+/// Used when upserting [`chronon_core::Job`] rows with [`chronon_core::ScheduleKind::Cron`]:
+/// set `job.cron_expr` (and optional `timezone`); `CoordinatorService::upsert_job` calls
+/// [`Self::parse`] and stores `next_run_at`.
+///
+/// Syntax: standard five-field cron (`minute hour day-of-month month day-of-week`). An optional
+/// sixth field enables seconds (`CronExpr::has_seconds`). Timezone names follow `chrono-tz`
+/// (e.g. `"America/New_York"`); omit for UTC.
+///
+/// # Examples
+///
+/// ```
+/// use chronon_scheduler::CronExpr;
+///
+/// let cron = CronExpr::parse("0 2 * * *", Some("UTC")).unwrap();
+/// assert_eq!(cron.expression(), "0 2 * * *");
+/// assert!(!cron.has_seconds());
+/// assert!(cron.next_from_now().is_some());
+///
+/// let with_secs = CronExpr::parse("0 0 2 * * *", None).unwrap();
+/// assert!(with_secs.has_seconds());
+/// ```
 #[derive(Debug, Clone)]
 pub struct CronExpr {
     expr: String,

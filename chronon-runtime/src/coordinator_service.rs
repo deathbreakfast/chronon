@@ -9,10 +9,45 @@ use chronon_core::{ChrononError, Result};
 use chronon_scheduler::{partition_hash_i64_for_job_id, CronExpr, job_execution_pool_id};
 use serde_json::Value;
 
-/// Object-safe coordinator operations backed by [`SchedulerStore`].
+/// Job and run CRUD backed by [`SchedulerStore`] — no background loops.
 ///
-/// Used by `chronon-axum` handlers and embedded hosts that need job/run APIs without
-/// starting scheduler loops.
+/// Use this when the host (or Axum handlers) needs to upsert jobs, pause/resume, list runs,
+/// or trigger [`Self::run_now`] without owning scheduler ticks. Obtained from
+/// [`crate::Chronon::coordinator_service`] or constructed with [`Self::new`] for HTTP /
+/// Mode 3 API hosts.
+///
+/// | Method | Role |
+/// |--------|------|
+/// | [`Self::upsert_job`] | Insert/update; computes partition hash and cron `next_run_at` |
+/// | [`Self::run_now`] | Enqueue an immediate run (required for [`ScheduleKind::Manual`](chronon_core::ScheduleKind::Manual)) |
+/// | [`Self::list_jobs`] / [`Self::list_runs`] | Admin / HTTP list |
+///
+/// For remote processes that cannot share the store, use [`crate::RemoteCoordinatorClient`]
+/// against a host that mounts `chronon_router` (Mode 3).
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use chronon_backend_mem::InMemorySchedulerStore;
+/// use chronon_core::{Job, ScheduleKind, SchedulerStore};
+/// use chronon_runtime::CoordinatorService;
+///
+/// # #[tokio::main]
+/// # async fn main() -> chronon_core::Result<()> {
+/// let store = Arc::new(InMemorySchedulerStore::new());
+/// let coordinator = CoordinatorService::new(store.clone());
+///
+/// let mut job = Job::new("manual-job", "noop");
+/// job.schedule_kind = ScheduleKind::Manual;
+/// coordinator.upsert_job(job.clone()).await?;
+///
+/// let run_id = coordinator.run_now(&job.job_id).await?;
+/// let run = store.get_run(&run_id).await?.expect("queued");
+/// assert_eq!(run.status, chronon_core::RunStatus::Queued);
+/// # Ok(())
+/// # }
+/// ```
 pub struct CoordinatorService {
     store: Arc<dyn SchedulerStore>,
 }
@@ -152,8 +187,28 @@ impl CoordinatorService {
     ///
     /// Returns the new `run_id`. Errors with [`ChrononError::JobNotFound`] when missing.
     ///
-    /// Manual jobs (`ScheduleKind::Manual`) are never due for the tick loop; use this
+    /// Manual jobs ([`ScheduleKind::Manual`]) are never due for the tick loop; use this
     /// (or HTTP `POST /jobs/run_now`) to trigger them. Works for any schedule kind.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use chronon_backend_mem::InMemorySchedulerStore;
+    /// use chronon_core::{Job, ScheduleKind};
+    /// use chronon_runtime::CoordinatorService;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> chronon_core::Result<()> {
+    /// let coordinator = CoordinatorService::new(Arc::new(InMemorySchedulerStore::new()));
+    /// let mut job = Job::new("probe", "noop");
+    /// job.schedule_kind = ScheduleKind::Manual;
+    /// coordinator.upsert_job(job.clone()).await?;
+    /// let run_id = coordinator.run_now(&job.job_id).await?;
+    /// assert!(!run_id.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// Runnable sample: `cargo run -p uf-chronon --example run_now --features mem`.
     pub async fn run_now(&self, job_id: &str) -> Result<String> {

@@ -15,8 +15,43 @@ struct StoredScript {
 
 /// In-memory script registry with optional link-time inventory discovery.
 ///
-/// Populated at boot via [`Self::register_from_inventory`] or manual [`Self::register`]
-/// calls; read by [`crate::execute_script`] and [`crate::Executor`].
+/// Populated at boot via [`Self::from_inventory`] / [`Self::register_from_inventory`] (from
+/// `#[chronon::script]`) or manual [`Self::register`] calls. Read by the executor when a run is
+/// claimed.
+///
+/// In Mode 2 (coordinator + worker), scripts must be registered on **worker** binaries —
+/// that is where handlers execute. Prefer `ChrononBuilder::auto_registry()` so inventory is
+/// collected automatically.
+///
+/// # Examples
+///
+/// Empty registry:
+///
+/// ```
+/// use chronon_executor::ScriptRegistry;
+///
+/// let registry = ScriptRegistry::new();
+/// assert!(registry.is_empty());
+/// ```
+///
+/// Explicit register (daemon-style, without the macro):
+///
+/// ```
+/// use chronon_core::{Result, ScriptContext};
+/// use chronon_executor::{ScriptDescriptor, ScriptRegistry};
+///
+/// fn noop(
+///     _ctx: Box<dyn ScriptContext>,
+///     _params: serde_json::Value,
+/// ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>> {
+///     Box::pin(async { Ok(()) })
+/// }
+///
+/// let mut registry = ScriptRegistry::new();
+/// registry.register(ScriptDescriptor::new("daemon-noop", noop));
+/// assert!(registry.contains("daemon-noop"));
+/// assert_eq!(registry.len(), 1);
+/// ```
 pub struct ScriptRegistry {
     scripts: HashMap<String, StoredScript>,
 }
@@ -45,6 +80,8 @@ impl ScriptRegistry {
     }
 
     /// Populate from all `#[chronon::script]` descriptors linked into the binary.
+    ///
+    /// Equivalent to `ChrononBuilder::auto_registry()` wiring. Prefer this on Mode 2 workers.
     pub fn from_inventory() -> Self {
         let mut registry = Self::new();
         registry.register_from_inventory();

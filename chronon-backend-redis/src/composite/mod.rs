@@ -18,6 +18,19 @@ use chronon_core::Result;
 use crate::queue::RedisQueueLayer;
 
 /// SQL persistence with Redis-backed run claim ordering.
+///
+/// Production Mode 2 store: job/run rows stay in Postgres (or any [`SchedulerStore`]); workers
+/// claim through Redis ZSETs for higher throughput. Requires facade features `postgres` and
+/// `redis`. Build with [`Self::new`] after connecting both layers.
+///
+/// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /
+/// [worker](index.html#mode-2--worker-binary).
+///
+/// See [`crate::RedisQueueLayer`] for URL / prefix / cluster env vars
+/// (`CHRONON_REDIS_URL`, `CHRONON_REDIS_CLUSTER_URLS`, `CHRONON_REDIS_HASH_TAGS`).
+///
+/// Runnable: `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis`
+/// and the `coordinator_daemon` / `worker_daemon` pair.
 pub struct PostgresRedisSchedulerStore {
     sql: Arc<dyn SchedulerStore>,
     redis: RedisQueueLayer,
