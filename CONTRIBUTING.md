@@ -50,7 +50,7 @@ See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full pre-PR checklist
 
 Record baseline `quality_signal` (currently **7424**) before changes; do not regress without justification.
 
-1. `scan` with path `/home/seanorourke/chronon`
+1. `scan` with path set to the repository root
 2. `check_rules` — zero violations (see `.sentrux/rules.toml`)
 3. After module boundary changes: `dsm` with `format=stats`
 

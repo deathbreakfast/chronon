@@ -5,11 +5,11 @@ alwaysApply: true
 
 # Chronon quality gate
 
-**Repo:** `/home/seanorourke/chronon` · **Facade:** `chronon` (`prelude` re-exports) · **Features:** none default; opt-in `mem`, `telemetry-console`, `axum`
+**Repo:** chronon (workspace root) · **Facade:** `chronon` (`prelude` re-exports) · **Features:** none default; opt-in `mem`, `telemetry-console`, `axum`
 
 ## Before finishing
 
-1. Sentrux MCP: `scan` path=`/home/seanorourke/chronon` — `quality_signal` must stay ≥ **7424**
+1. Sentrux MCP: `scan` path=`<repo-root>` — `quality_signal` must stay ≥ **7424**
 2. Sentrux: `check_rules` — zero violations (`.sentrux/rules.toml`)
 3. `cargo clippy --workspace --all-targets -- -D warnings`
 4. `cargo test --workspace`
