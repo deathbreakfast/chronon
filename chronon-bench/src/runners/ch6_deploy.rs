@@ -23,8 +23,7 @@ async fn measure_enqueue_to_run(matrix: MatrixSpec, ops: usize) -> Result<Vec<f6
     for i in 0..ops {
         let job_name = format!("bench-ch6-{i}");
         let start = Instant::now();
-        let mut job =
-            upsert_immediate_run_once_job(store.as_ref(), &job_name, NOOP_SCRIPT).await?;
+        let mut job = upsert_immediate_run_once_job(store.as_ref(), &job_name, NOOP_SCRIPT).await?;
         job.actor_json = chronon_testkit::smoke_actor_json();
         store.upsert_job(&job).await?;
 

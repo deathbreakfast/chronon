@@ -100,12 +100,18 @@ pub(crate) async fn get_job_by_name(
     store: &SqlSchedulerStore,
     job_name: &str,
 ) -> Result<Option<Job>> {
-    let sql = bind_sql(store.dialect, "SELECT * FROM chronon_job WHERE job_name = ?");
+    let sql = bind_sql(
+        store.dialect,
+        "SELECT * FROM chronon_job WHERE job_name = ?",
+    );
     sql_fetch_optional_map!(store, &sql, |q| q.bind(job_name), |r| row_to_job(&r))
 }
 
 pub(crate) async fn list_jobs(store: &SqlSchedulerStore) -> Result<Vec<Job>> {
-    let sql = bind_sql(store.dialect, "SELECT * FROM chronon_job ORDER BY created_at ASC");
+    let sql = bind_sql(
+        store.dialect,
+        "SELECT * FROM chronon_job ORDER BY created_at ASC",
+    );
     sql_fetch_all_map!(store, &sql, |q| q, |r| row_to_job(r))
 }
 

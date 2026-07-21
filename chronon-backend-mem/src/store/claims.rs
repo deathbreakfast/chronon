@@ -14,7 +14,7 @@ pub(super) fn try_claim_run_once(
     now: DateTime<Utc>,
     claim_ttl_secs: i64,
 ) -> Result<bool> {
-    let mut jobs = store.jobs.write().expect("jobs lock");
+    let mut jobs = store.jobs.write();
     let Some(job) = jobs.get_mut(job_id) else {
         return Ok(false);
     };
@@ -77,7 +77,6 @@ pub(super) fn find_due_job_ids_in_partitions(
     let mut due: Vec<_> = store
         .jobs
         .read()
-        .expect("jobs lock")
         .values()
         .filter(|j| j.enabled && j.schedule_kind != ScheduleKind::Manual)
         .filter(|j| j.next_run_at.is_some_and(|t| t <= due_until))
@@ -106,7 +105,6 @@ pub(super) fn min_next_run_at_in_partitions(
     Ok(store
         .jobs
         .read()
-        .expect("jobs lock")
         .values()
         .filter(|j| j.enabled && j.schedule_kind != ScheduleKind::Manual)
         .filter(|j| j.partition_hash.is_some_and(|h| parts.contains(&h)))
@@ -121,7 +119,7 @@ pub(super) fn claim_job_for_tick(
     now: DateTime<Utc>,
     lease_ttl_secs: i64,
 ) -> Result<bool> {
-    let mut jobs = store.jobs.write().expect("jobs lock");
+    let mut jobs = store.jobs.write();
     let Some(job) = jobs.get_mut(job_id) else {
         return Ok(false);
     };
@@ -137,10 +135,7 @@ pub(super) fn claim_job_for_tick(
     Ok(true)
 }
 
-pub(super) fn release_job_tick_claim(
-    store: &InMemorySchedulerStore,
-    job_id: &str,
-) -> Result<()> {
+pub(super) fn release_job_tick_claim(store: &InMemorySchedulerStore, job_id: &str) -> Result<()> {
     store.mutate_job(job_id, |j| {
         j.claim_lease_id = None;
         j.claim_lease_until = None;

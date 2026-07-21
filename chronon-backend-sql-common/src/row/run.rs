@@ -6,8 +6,7 @@ use chronon_core::models::Run;
 use sqlx::{ColumnIndex, Row};
 
 use super::{
-    decode_json, decode_json_opt, encode_json, encode_json_opt, parse_run_status,
-    run_status_to_str,
+    decode_json, decode_json_opt, encode_json, encode_json_opt, parse_run_status, run_status_to_str,
 };
 use crate::error_map::map_err;
 
@@ -87,8 +86,8 @@ impl RunRow {
             instance_id: self.instance_id,
             placement_json: decode_json_opt(self.placement_json)?,
             pool_id: self.pool_id,
-            actor_json: decode_json(self.actor_json)?,
-            params_json: decode_json(self.params_json)?,
+            actor_json: decode_json(&self.actor_json)?,
+            params_json: decode_json(&self.params_json)?,
             stdout_text: self.stdout_text,
             stderr_text: self.stderr_text,
             error_json: decode_json_opt(self.error_json)?,
@@ -113,31 +112,31 @@ where
     Option<i64>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Option<DateTime<Utc>>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
-    let status: String = row.try_get("status").map_err(|e| map_err(&e))?;
+    let status: String = row.try_get("status").map_err(map_err)?;
     RunRow {
-        run_id: row.try_get("run_id").map_err(|e| map_err(&e))?,
-        job_id: row.try_get("job_id").map_err(|e| map_err(&e))?,
-        script_name: row.try_get("script_name").map_err(|e| map_err(&e))?,
-        parent_run_id: row.try_get("parent_run_id").map_err(|e| map_err(&e))?,
-        root_run_id: row.try_get("root_run_id").map_err(|e| map_err(&e))?,
-        child_index: row.try_get("child_index").map_err(|e| map_err(&e))?,
-        scheduled_for: row.try_get("scheduled_for").map_err(|e| map_err(&e))?,
-        started_at: row.try_get("started_at").map_err(|e| map_err(&e))?,
-        finished_at: row.try_get("finished_at").map_err(|e| map_err(&e))?,
-        duration_ms: row.try_get("duration_ms").map_err(|e| map_err(&e))?,
+        run_id: row.try_get("run_id").map_err(map_err)?,
+        job_id: row.try_get("job_id").map_err(map_err)?,
+        script_name: row.try_get("script_name").map_err(map_err)?,
+        parent_run_id: row.try_get("parent_run_id").map_err(map_err)?,
+        root_run_id: row.try_get("root_run_id").map_err(map_err)?,
+        child_index: row.try_get("child_index").map_err(map_err)?,
+        scheduled_for: row.try_get("scheduled_for").map_err(map_err)?,
+        started_at: row.try_get("started_at").map_err(map_err)?,
+        finished_at: row.try_get("finished_at").map_err(map_err)?,
+        duration_ms: row.try_get("duration_ms").map_err(map_err)?,
         status,
-        attempt: row.try_get("attempt").map_err(|e| map_err(&e))?,
-        instance_id: row.try_get("instance_id").map_err(|e| map_err(&e))?,
-        placement_json: row.try_get("placement_json").map_err(|e| map_err(&e))?,
-        pool_id: row.try_get("pool_id").map_err(|e| map_err(&e))?,
-        actor_json: row.try_get("actor_json").map_err(|e| map_err(&e))?,
-        params_json: row.try_get("params_json").map_err(|e| map_err(&e))?,
-        stdout_text: row.try_get("stdout_text").map_err(|e| map_err(&e))?,
-        stderr_text: row.try_get("stderr_text").map_err(|e| map_err(&e))?,
-        error_json: row.try_get("error_json").map_err(|e| map_err(&e))?,
-        stats_json: row.try_get("stats_json").map_err(|e| map_err(&e))?,
-        claimed_by: row.try_get("claimed_by").map_err(|e| map_err(&e))?,
-        claim_lease_until: row.try_get("claim_lease_until").map_err(|e| map_err(&e))?,
+        attempt: row.try_get("attempt").map_err(map_err)?,
+        instance_id: row.try_get("instance_id").map_err(map_err)?,
+        placement_json: row.try_get("placement_json").map_err(map_err)?,
+        pool_id: row.try_get("pool_id").map_err(map_err)?,
+        actor_json: row.try_get("actor_json").map_err(map_err)?,
+        params_json: row.try_get("params_json").map_err(map_err)?,
+        stdout_text: row.try_get("stdout_text").map_err(map_err)?,
+        stderr_text: row.try_get("stderr_text").map_err(map_err)?,
+        error_json: row.try_get("error_json").map_err(map_err)?,
+        stats_json: row.try_get("stats_json").map_err(map_err)?,
+        claimed_by: row.try_get("claimed_by").map_err(map_err)?,
+        claim_lease_until: row.try_get("claim_lease_until").map_err(map_err)?,
     }
     .to_model()
 }

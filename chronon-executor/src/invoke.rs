@@ -49,6 +49,14 @@ fn record_executor_error(
 }
 
 /// Execute a script synchronously.
+#[tracing::instrument(
+    skip(req),
+    fields(
+        script_name = %req.script_name,
+        job_name = %req.job_name,
+        run_id = %req.run_id,
+    )
+)]
 pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> Result<()> {
     let ExecuteScriptRequest {
         registry,
@@ -72,39 +80,42 @@ pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> Result<()> {
         );
     })?;
 
-    let ctx = context_factory.build(actor_json).map_err(|e| {
-        let msg = format!("Failed to build script context: {e}");
+    let ctx = context_factory.build(actor_json).inspect_err(|e| {
         record_executor_error(
             telemetry,
             job_name,
             run_id,
             script_name,
             "context_build",
-            &msg,
+            &e.to_string(),
         );
-        ChrononError::Internal(msg)
     })?;
 
-    (descriptor.invoke)(ctx, params_json)
-        .await
-        .map_err(|e| {
-            record_executor_error(
-                telemetry,
-                job_name,
-                run_id,
-                script_name,
-                "script_invoke",
-                &e.to_string(),
-            );
-            map_invoke_error(e.to_string())
-        })
+    (descriptor.invoke)(ctx, params_json).await.map_err(|e| {
+        record_executor_error(
+            telemetry,
+            job_name,
+            run_id,
+            script_name,
+            "script_invoke",
+            &e.to_string(),
+        );
+        map_invoke_error(e)
+    })
 }
 
-fn map_invoke_error(message: String) -> ChrononError {
-    if is_likely_param_error(&message) {
-        ChrononError::ParamError(message)
-    } else {
-        ChrononError::Internal(message)
+fn map_invoke_error(err: ChrononError) -> ChrononError {
+    match err {
+        ChrononError::ParamError(_)
+        | ChrononError::ScriptNotFound(_)
+        | ChrononError::Identity(_)
+        | ChrononError::InvalidCron(_)
+        | ChrononError::InvalidTimezone(_)
+        | ChrononError::ScriptMismatch { .. } => err,
+        ChrononError::Internal(message) if is_likely_param_error(&message) => {
+            ChrononError::ParamError(message)
+        }
+        other => other,
     }
 }
 
@@ -140,7 +151,7 @@ mod tests {
     #[tokio::test]
     async fn execute_registered_script() {
         let mut registry = ScriptRegistry::new();
-        registry.register(ScriptDescriptor::new("test_script", noop_invoke));
+        registry.register(&ScriptDescriptor::new("test_script", noop_invoke));
         let factory: Arc<dyn chronon_core::ContextFactory> = Arc::new(NoOpContextFactory);
         let telemetry: Arc<dyn chronon_telemetry::TelemetrySink> =
             Arc::new(chronon_telemetry::NoOpSink);

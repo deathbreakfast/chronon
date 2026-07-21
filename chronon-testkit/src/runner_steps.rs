@@ -71,7 +71,12 @@ pub(super) async fn run_mutation_step(
             *last_tick = Some(tick);
         }
         ScenarioStep::PauseJob { job_name } | ScenarioStep::ResumeJob { job_name } => {
-            job_action(session, job_name, matches!(step, ScenarioStep::PauseJob { .. })).await?;
+            job_action(
+                session,
+                job_name,
+                matches!(step, ScenarioStep::PauseJob { .. }),
+            )
+            .await?;
         }
         ScenarioStep::RunNow { job_name } => {
             let chronon = session.ensure_chronon()?;
@@ -87,14 +92,9 @@ pub(super) async fn run_mutation_step(
         } => {
             let store = session.store_dyn()?;
             let start = Instant::now();
-            wait_for_run_terminal(
-                store,
-                job_name,
-                *status,
-                Duration::from_millis(*timeout_ms),
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+            wait_for_run_terminal(store, job_name, *status, Duration::from_millis(*timeout_ms))
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
             if mode == RunMode::Benchmark {
                 step_timings.push(StepTiming {
                     step_index,
@@ -237,11 +237,7 @@ async fn job_by_name(
         .ok_or_else(|| anyhow::anyhow!("job {job_name} not found"))
 }
 
-async fn job_action(
-    session: &mut BootstrapSession,
-    job_name: &str,
-    pause: bool,
-) -> Result<()> {
+async fn job_action(session: &mut BootstrapSession, job_name: &str, pause: bool) -> Result<()> {
     let chronon = session.ensure_chronon()?;
     let job = job_by_name(chronon, job_name).await?;
     if pause {

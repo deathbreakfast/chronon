@@ -10,10 +10,8 @@ use serde_json::Value;
 ///
 /// Registered via [`ScriptDescriptor`] and called by [`crate::execute_script`] after
 /// context build; must be `Send` because runs execute on the tokio runtime.
-pub type InvokeFn = fn(
-    Box<dyn ScriptContext>,
-    Value,
-) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
+pub type InvokeFn =
+    fn(Box<dyn ScriptContext>, Value) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
 
 /// Descriptor for a registered script.
 ///

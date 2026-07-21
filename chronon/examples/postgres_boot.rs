@@ -15,14 +15,13 @@ use chronon_backend_postgres::{postgres_test_url, PostgresSchedulerStore};
 #[tokio::main]
 async fn main() -> chronon::Result<()> {
     let url = postgres_test_url();
-    let store: Arc<dyn SchedulerStore> =
-        Arc::new(PostgresSchedulerStore::connect(&url).await?);
+    let store: Arc<dyn SchedulerStore> = Arc::new(PostgresSchedulerStore::connect(&url).await?);
     let chronon = ChrononBuilder::new()
         .scheduler_store(store)
         .embedded()
         .build()?;
 
     assert_eq!(chronon.executor().script_count(), 0);
-    println!("Chronon booted with PostgreSQL store ({url})");
+    eprintln!("Chronon booted with PostgreSQL store ({url})");
     Ok(())
 }

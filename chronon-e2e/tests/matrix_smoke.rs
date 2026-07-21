@@ -1,7 +1,8 @@
 //! Matrix smoke — bootstrap + scenario JSON roundtrip.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use chronon_testkit::{
-    embedded_catalog, coordinator_catalog, run_catalog_entry, BootstrapSession, MatrixSpec,
+    coordinator_catalog, embedded_catalog, run_catalog_entry, BootstrapSession, MatrixSpec,
     ScenarioSpec, StorageAdapter,
 };
 

@@ -84,7 +84,7 @@ pub const API_PREFIX: &str = "/api/chronon";
 /// let coordinator = Arc::new(CoordinatorService::new(store));
 /// let registry = Arc::new({
 ///     let mut r = ScriptRegistry::new();
-///     r.register(ScriptDescriptor::new("demo", noop));
+///     r.register(&ScriptDescriptor::new("demo", noop));
 ///     r
 /// });
 /// let app = chronon_router::<AppState>().with_state(AppState {

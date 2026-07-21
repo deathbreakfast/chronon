@@ -78,9 +78,9 @@ enum ScheduleKindDto {
 impl From<ScheduleKind> for ScheduleKindDto {
     fn from(k: ScheduleKind) -> Self {
         match k {
-            ScheduleKind::Cron => ScheduleKindDto::Cron,
-            ScheduleKind::RunOnce => ScheduleKindDto::RunOnce,
-            ScheduleKind::Manual => ScheduleKindDto::Manual,
+            ScheduleKind::Cron => Self::Cron,
+            ScheduleKind::RunOnce => Self::RunOnce,
+            ScheduleKind::Manual => Self::Manual,
         }
     }
 }
@@ -183,9 +183,7 @@ impl RemoteCoordinatorClient {
         format!("{}/api/chronon{}", self.base_url, path)
     }
 
-    async fn parse_response<T: for<'de> Deserialize<'de>>(
-        resp: reqwest::Response,
-    ) -> Result<T> {
+    async fn parse_response<T: for<'de> Deserialize<'de>>(resp: reqwest::Response) -> Result<T> {
         let status = resp.status();
         let body: ApiResponse<T> = resp
             .json()

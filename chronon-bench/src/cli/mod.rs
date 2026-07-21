@@ -1,7 +1,7 @@
 //! CLI subcommands for `chronon-bench`.
 
-pub mod bench_config;
 mod aggregate_cmd;
+pub mod bench_config;
 mod matrix_cmd;
 mod run_cmd;
 mod scaling_curve_cmd;

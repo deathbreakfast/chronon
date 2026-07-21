@@ -19,6 +19,13 @@ async fn tick_demo(ctx: Box<dyn ScriptContext>) -> chronon::Result<()> {
 
 #[tokio::main]
 async fn main() -> chronon::Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .try_init();
+
     let store = Arc::new(InMemorySchedulerStore::new());
     let chronon = ChrononBuilder::new()
         .scheduler_store(store.clone())
@@ -41,6 +48,6 @@ async fn main() -> chronon::Result<()> {
     let runs = store.list_runs_for_job(&job_id, 10).await?;
     assert!(!runs.is_empty(), "expected a persisted run row");
 
-    println!("tick enqueued {} run(s)", tick.enqueued);
+    eprintln!("tick enqueued {} run(s)", tick.enqueued);
     Ok(())
 }

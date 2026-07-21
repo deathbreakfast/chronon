@@ -1,5 +1,7 @@
 //! Error types for Chronon.
 
+use std::error::Error;
+
 use thiserror::Error;
 
 /// Result type alias for Chronon operations.
@@ -47,12 +49,43 @@ pub enum ChrononError {
     },
 
     /// Underlying storage backend failed or returned an unexpected condition.
-    #[error("storage error: {0}")]
-    StorageError(String),
+    #[error("storage error: {message}")]
+    StorageError {
+        /// Human-readable summary (stable for logs and HTTP bodies).
+        message: String,
+        /// Optional underlying backend error for `Error::source` chains.
+        #[source]
+        source: Option<Box<dyn Error + Send + Sync>>,
+    },
 
-    /// Catch-all for invariant violations, identity reconstruction failures, and bugs.
+    /// Identity / actor reconstruction failed when building script context.
+    #[error("identity error: {0}")]
+    Identity(String),
+
+    /// Catch-all for invariant violations and bugs.
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+impl ChrononError {
+    /// Storage failure without an underlying source.
+    pub fn storage(message: impl Into<String>) -> Self {
+        Self::StorageError {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    /// Storage failure wrapping an underlying error.
+    pub fn storage_source(
+        message: impl Into<String>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::StorageError {
+            message: message.into(),
+            source: Some(Box::new(source)),
+        }
+    }
 }
 
 impl From<serde_json::Error> for ChrononError {

@@ -122,13 +122,11 @@ pub async fn ensure_schema(store: &SqlSchedulerStore) -> Result<()> {
                 "postgres dialect without postgres pool".into(),
             ));
         };
-        let mut conn = pool.acquire().await.map_err(|e| {
-            chronon_core::ChrononError::StorageError(e.to_string())
-        })?;
+        let mut conn = pool.acquire().await.map_err(crate::error_map::map_err)?;
         sqlx::query("SELECT pg_advisory_lock(872349013)")
             .execute(&mut *conn)
             .await
-            .map_err(|e| chronon_core::ChrononError::StorageError(e.to_string()))?;
+            .map_err(crate::error_map::map_err)?;
         let result = ensure_schema_tables_on_conn(&mut conn).await;
         let _ = sqlx::query("SELECT pg_advisory_unlock(872349013)")
             .execute(&mut *conn)
@@ -138,18 +136,20 @@ pub async fn ensure_schema(store: &SqlSchedulerStore) -> Result<()> {
     ensure_schema_tables(store).await
 }
 
-async fn ensure_schema_tables_on_conn(conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>) -> Result<()> {
+async fn ensure_schema_tables_on_conn(
+    conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
+) -> Result<()> {
     for ddl in schema_table_ddls() {
         sqlx::query(ddl)
             .execute(&mut **conn)
             .await
-            .map_err(|e| chronon_core::ChrononError::StorageError(e.to_string()))?;
+            .map_err(crate::error_map::map_err)?;
     }
     for ddl in schema_index_ddls() {
         sqlx::query(ddl)
             .execute(&mut **conn)
             .await
-            .map_err(|e| chronon_core::ChrononError::StorageError(e.to_string()))?;
+            .map_err(crate::error_map::map_err)?;
     }
     Ok(())
 }

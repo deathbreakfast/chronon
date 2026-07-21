@@ -32,9 +32,9 @@ pub fn smoke_actor_json() -> Value {
 
 /// Register built-in probe scripts on `registry`.
 pub fn register_builtin_probes(registry: &mut ScriptRegistry) {
-    registry.register(ScriptDescriptor::new(NOOP_SCRIPT, noop_probe));
-    registry.register(ScriptDescriptor::new(COUNTING_SCRIPT, counting_probe));
-    registry.register(ScriptDescriptor::new(FAIL_SCRIPT, fail_probe));
+    registry.register(&ScriptDescriptor::new(NOOP_SCRIPT, noop_probe));
+    registry.register(&ScriptDescriptor::new(COUNTING_SCRIPT, counting_probe));
+    registry.register(&ScriptDescriptor::new(FAIL_SCRIPT, fail_probe));
 }
 
 /// Reset the counting probe global (call at scenario start when needed).
@@ -79,7 +79,8 @@ pub async fn seed_due_cron_jobs(
 ) -> chronon_core::Result<()> {
     for i in 0..count {
         let job_name = format!("bench-seed-{i}");
-        let mut job = upsert_immediate_cron_job(store, &job_name, script_name, "0 * * * * *").await?;
+        let mut job =
+            upsert_immediate_cron_job(store, &job_name, script_name, "0 * * * * *").await?;
         job.actor_json = smoke_actor_json();
         store.upsert_job(&job).await?;
     }
@@ -97,7 +98,9 @@ pub async fn upsert_immediate_cron_job(
     job.schedule_kind = ScheduleKind::Cron;
     job.cron_expr = Some(cron_expr.to_string());
     job.next_run_at = Some(Utc::now() - Duration::seconds(60));
-    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(&job.job_id));
+    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(
+        &job.job_id,
+    ));
     let _ = CronExpr::parse(cron_expr, None);
     store.upsert_job(&job).await?;
     Ok(job)
@@ -114,7 +117,9 @@ pub async fn upsert_future_cron_job(
     job.schedule_kind = ScheduleKind::Cron;
     job.cron_expr = Some(cron_expr.to_string());
     job.next_run_at = Some(Utc::now() + Duration::hours(1));
-    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(&job.job_id));
+    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(
+        &job.job_id,
+    ));
     store.upsert_job(&job).await?;
     Ok(job)
 }
@@ -128,7 +133,9 @@ pub async fn upsert_manual_job(
     let mut job = Job::new(job_name, script_name);
     job.schedule_kind = ScheduleKind::Manual;
     job.next_run_at = None;
-    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(&job.job_id));
+    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(
+        &job.job_id,
+    ));
     store.upsert_job(&job).await?;
     Ok(job)
 }
@@ -142,7 +149,9 @@ pub async fn upsert_immediate_run_once_job(
     let mut job = Job::new(job_name, script_name);
     job.schedule_kind = ScheduleKind::RunOnce;
     job.next_run_at = Some(Utc::now() - Duration::seconds(60));
-    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(&job.job_id));
+    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(
+        &job.job_id,
+    ));
     store.upsert_job(&job).await?;
     Ok(job)
 }

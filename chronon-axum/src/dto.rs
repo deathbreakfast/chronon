@@ -67,9 +67,9 @@ pub enum ScheduleKindDto {
 impl From<ScheduleKindDto> for ScheduleKind {
     fn from(dto: ScheduleKindDto) -> Self {
         match dto {
-            ScheduleKindDto::Cron => ScheduleKind::Cron,
-            ScheduleKindDto::RunOnce => ScheduleKind::RunOnce,
-            ScheduleKindDto::Manual => ScheduleKind::Manual,
+            ScheduleKindDto::Cron => Self::Cron,
+            ScheduleKindDto::RunOnce => Self::RunOnce,
+            ScheduleKindDto::Manual => Self::Manual,
         }
     }
 }
@@ -77,9 +77,9 @@ impl From<ScheduleKindDto> for ScheduleKind {
 impl From<ScheduleKind> for ScheduleKindDto {
     fn from(kind: ScheduleKind) -> Self {
         match kind {
-            ScheduleKind::Cron => ScheduleKindDto::Cron,
-            ScheduleKind::RunOnce => ScheduleKindDto::RunOnce,
-            ScheduleKind::Manual => ScheduleKindDto::Manual,
+            ScheduleKind::Cron => Self::Cron,
+            ScheduleKind::RunOnce => Self::RunOnce,
+            ScheduleKind::Manual => Self::Manual,
         }
     }
 }

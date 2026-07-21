@@ -15,9 +15,11 @@
 //! ([`NOOP_SCRIPT`], [`COUNTING_SCRIPT`]) register on every Chronon build. Partition count
 //! is fixed to four via `CHRONON_NUM_PARTITIONS` during bootstrap.
 
-mod distributed;
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 mod bootstrap;
 mod catalog;
+mod distributed;
 mod fixtures;
 mod macros;
 mod matrix;
@@ -30,9 +32,14 @@ mod store_contract;
 
 pub use bootstrap::{BootstrapSession, EmbeddedHandle, SplitHandle};
 pub use catalog::{
-    run_catalog_entry, run_catalog_entry_by_id, coordinator_catalog, embedded_catalog,
-    CatalogDeployment, CatalogEntry, PathKind, e2e_storage_backends, mem_coordinator_catalog,
-    mem_embedded_catalog,
+    coordinator_catalog, e2e_storage_backends, embedded_catalog, mem_coordinator_catalog,
+    mem_embedded_catalog, run_catalog_entry, run_catalog_entry_by_id, CatalogDeployment,
+    CatalogEntry, PathKind,
+};
+pub use distributed::{
+    coordinator_leader_exclusive_smoke, distributed_store_available,
+    dual_worker_claim_exclusive_smoke, dual_worker_wrong_pool_idle_smoke,
+    postgres_redis_hybrid_claim_roundtrip_smoke,
 };
 pub use fixtures::{
     counting_probe_total, reset_counting_probe, seed_due_cron_jobs, smoke_actor_json,
@@ -44,11 +51,6 @@ pub use runner::{ScenarioResult, ScenarioRunner};
 pub use runner_types::{RunMode, StepTiming};
 pub use scenario::{ScenarioSpec, ScenarioStep, ScriptProbeKind};
 pub use shared_store::{extended_store_available, extended_store_skip_reason};
-pub use distributed::{
-    coordinator_leader_exclusive_smoke, distributed_store_available,
-    dual_worker_claim_exclusive_smoke, dual_worker_wrong_pool_idle_smoke,
-    postgres_redis_hybrid_claim_roundtrip_smoke,
-};
 pub use store_contract::run_store_contract;
 
 pub use paste;

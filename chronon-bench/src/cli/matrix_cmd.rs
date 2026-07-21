@@ -19,11 +19,9 @@ pub async fn run_matrix_subset(args: MatrixArgs) -> Result<()> {
             "{}-{}-{}-{}",
             args.storage, args.deployment, args.topology, args.telemetry
         );
-        let path = args.reports_dir.join(BenchReport::report_filename(
-            id,
-            &matrix_slug,
-            &hardware,
-        ));
+        let path = args
+            .reports_dir
+            .join(BenchReport::report_filename(id, &matrix_slug, &hardware));
         println!("running {id} …");
         run_batch(BatchRunParams {
             experiment: id,

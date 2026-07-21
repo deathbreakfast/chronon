@@ -47,10 +47,10 @@ where
     DateTime<Utc>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     Ok(PartitionAssignmentRow {
-        partition_id: row.try_get("partition_id").map_err(|e| map_err(&e))?,
-        owner_instance_id: row.try_get("owner_instance_id").map_err(|e| map_err(&e))?,
-        lease_until: row.try_get("lease_until").map_err(|e| map_err(&e))?,
-        updated_at: row.try_get("updated_at").map_err(|e| map_err(&e))?,
+        partition_id: row.try_get("partition_id").map_err(map_err)?,
+        owner_instance_id: row.try_get("owner_instance_id").map_err(map_err)?,
+        lease_until: row.try_get("lease_until").map_err(map_err)?,
+        updated_at: row.try_get("updated_at").map_err(map_err)?,
     }
     .to_model())
 }

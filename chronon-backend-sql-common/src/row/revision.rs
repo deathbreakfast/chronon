@@ -39,8 +39,8 @@ impl JobRevisionRow {
             job_id: self.job_id,
             revision_number: self.revision_number,
             changed_at: self.changed_at,
-            changed_by_actor_json: decode_json(self.changed_by_actor_json)?,
-            snapshot_json: decode_json(self.snapshot_json)?,
+            changed_by_actor_json: decode_json(&self.changed_by_actor_json)?,
+            snapshot_json: decode_json(&self.snapshot_json)?,
         })
     }
 }
@@ -55,14 +55,12 @@ where
     DateTime<Utc>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     JobRevisionRow {
-        revision_id: row.try_get("revision_id").map_err(|e| map_err(&e))?,
-        job_id: row.try_get("job_id").map_err(|e| map_err(&e))?,
-        revision_number: row.try_get("revision_number").map_err(|e| map_err(&e))?,
-        changed_at: row.try_get("changed_at").map_err(|e| map_err(&e))?,
-        changed_by_actor_json: row
-            .try_get("changed_by_actor_json")
-            .map_err(|e| map_err(&e))?,
-        snapshot_json: row.try_get("snapshot_json").map_err(|e| map_err(&e))?,
+        revision_id: row.try_get("revision_id").map_err(map_err)?,
+        job_id: row.try_get("job_id").map_err(map_err)?,
+        revision_number: row.try_get("revision_number").map_err(map_err)?,
+        changed_at: row.try_get("changed_at").map_err(map_err)?,
+        changed_by_actor_json: row.try_get("changed_by_actor_json").map_err(map_err)?,
+        snapshot_json: row.try_get("snapshot_json").map_err(map_err)?,
     }
     .to_model()
 }

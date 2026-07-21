@@ -1,5 +1,6 @@
 //! E2E: two multibench clients drain a shared queue (BM-CH7 regression).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -131,6 +132,14 @@ async fn multibench_two_clients_split_prefilled_queue() {
     std::env::remove_var("CHRONON_CH7_DRAIN_IDLE_SECS");
 
     assert_eq!(ops0 + ops1, prefill);
-    assert_eq!(ops0, prefill / u64::from(pools), "client 0 pool share, got {ops0}");
-    assert_eq!(ops1, prefill / u64::from(pools), "client 1 pool share, got {ops1}");
+    assert_eq!(
+        ops0,
+        prefill / u64::from(pools),
+        "client 0 pool share, got {ops0}"
+    );
+    assert_eq!(
+        ops1,
+        prefill / u64::from(pools),
+        "client 1 pool share, got {ops1}"
+    );
 }

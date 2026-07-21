@@ -35,7 +35,7 @@ impl ScriptRow {
         Ok(Script {
             script_id: self.script_id,
             script_name: self.script_name,
-            signature_json: decode_json(self.signature_json)?,
+            signature_json: decode_json(&self.signature_json)?,
             signature_hash: self.signature_hash,
             created_at: self.created_at,
         })
@@ -51,11 +51,11 @@ where
     DateTime<Utc>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     ScriptRow {
-        script_id: row.try_get("script_id").map_err(|e| map_err(&e))?,
-        script_name: row.try_get("script_name").map_err(|e| map_err(&e))?,
-        signature_json: row.try_get("signature_json").map_err(|e| map_err(&e))?,
-        signature_hash: row.try_get("signature_hash").map_err(|e| map_err(&e))?,
-        created_at: row.try_get("created_at").map_err(|e| map_err(&e))?,
+        script_id: row.try_get("script_id").map_err(map_err)?,
+        script_name: row.try_get("script_name").map_err(map_err)?,
+        signature_json: row.try_get("signature_json").map_err(map_err)?,
+        signature_hash: row.try_get("signature_hash").map_err(map_err)?,
+        created_at: row.try_get("created_at").map_err(map_err)?,
     }
     .to_model()
 }

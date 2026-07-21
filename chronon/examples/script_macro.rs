@@ -9,16 +9,20 @@ use chronon::prelude::*;
 use chronon_backend_mem::InMemorySchedulerStore;
 
 #[chronon::script(name = "nightly_cleanup")]
-async fn nightly_cleanup(
-    ctx: Box<dyn ScriptContext>,
-    retention_days: u32,
-) -> chronon::Result<()> {
+async fn nightly_cleanup(ctx: Box<dyn ScriptContext>, retention_days: u32) -> chronon::Result<()> {
     let _ = (ctx.label(), retention_days);
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> chronon::Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .try_init();
+
     let store = Arc::new(InMemorySchedulerStore::new());
     let chronon = ChrononBuilder::new()
         .scheduler_store(store)
@@ -39,9 +43,6 @@ async fn main() -> chronon::Result<()> {
     let tick = chronon.tick_once().await?;
     assert!(tick.enqueued >= 1);
 
-    println!(
-        "script registered; tick enqueued {} run(s)",
-        tick.enqueued
-    );
+    eprintln!("script registered; tick enqueued {} run(s)", tick.enqueued);
     Ok(())
 }

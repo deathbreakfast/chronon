@@ -72,7 +72,9 @@ pub fn chl_sustain_curve(
     };
 
     let out_path = out.unwrap_or_else(|| {
-        reports_dir.join(format!("scaling-curve-chl-sustain-{storage}-{hardware}.json"))
+        reports_dir.join(format!(
+            "scaling-curve-chl-sustain-{storage}-{hardware}.json"
+        ))
     });
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;

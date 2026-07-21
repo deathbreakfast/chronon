@@ -41,13 +41,5 @@ pub async fn run_embedded_loops(
         .await;
     });
 
-    run_worker_loop(
-        store,
-        executor,
-        telemetry,
-        pool,
-        instance_id,
-        shutdown,
-    )
-    .await;
+    run_worker_loop(store, executor, telemetry, pool, instance_id, shutdown).await;
 }

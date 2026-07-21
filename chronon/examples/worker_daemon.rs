@@ -39,7 +39,7 @@ async fn main() -> chronon::Result<()> {
 
     let registry = Arc::new({
         let mut r = ScriptRegistry::new();
-        r.register(ScriptDescriptor::new("daemon-noop", noop_script));
+        r.register(&ScriptDescriptor::new("daemon-noop", noop_script));
         r
     });
 
@@ -51,6 +51,6 @@ async fn main() -> chronon::Result<()> {
         .worker(&pool)
         .build()?;
 
-    eprintln!("worker_daemon: {instance_id} pool={pool} ({pg_url}, {redis_url})");
+    eeprintln!("worker_daemon: {instance_id} pool={pool} ({pg_url}, {redis_url})");
     chronon.run().await
 }

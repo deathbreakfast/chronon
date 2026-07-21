@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use chronon_core::models::PartitionAssignment;
 use chronon_core::store::SchedulerStore;
 use chronon_core::Result;
@@ -52,15 +52,12 @@ impl PartitionAssigner {
         if rows.iter().any(|r| r.partition_id == key) {
             return Ok(());
         }
-        let epoch = chrono::DateTime::parse_from_rfc3339("1970-01-01T00:00:00Z")
-            .expect("epoch")
-            .with_timezone(&Utc);
         let now = Utc::now();
         self.store
             .upsert_partition_assignment(&PartitionAssignment {
                 partition_id: key,
                 owner_instance_id: String::new(),
-                lease_until: epoch,
+                lease_until: DateTime::<Utc>::UNIX_EPOCH,
                 updated_at: now,
             })
             .await
@@ -173,7 +170,7 @@ impl PartitionAssigner {
         ));
         loop {
             tokio::select! {
-                _ = shutdown.notified() => break,
+                () = shutdown.notified() => break,
                 _ = interval.tick() => {
                     if let Err(e) = self.refresh_leases().await {
                         self.telemetry.log_event(

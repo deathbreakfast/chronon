@@ -19,6 +19,6 @@ async fn main() -> chronon::Result<()> {
         .build()?;
 
     assert_eq!(chronon.executor().script_count(), 0);
-    println!("Chronon booted with SQLite store");
+    eprintln!("Chronon booted with SQLite store");
     Ok(())
 }

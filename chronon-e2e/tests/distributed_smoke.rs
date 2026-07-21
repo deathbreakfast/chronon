@@ -6,6 +6,7 @@
 //! In-process postgres-redis dual-worker helpers also live here via
 //! [`chronon_testkit::matrix_distributed_scenario_suite`].
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -43,14 +44,16 @@ async fn connect_store(
     redis_prefix: &str,
 ) -> anyhow::Result<std::sync::Arc<dyn SchedulerStore>> {
     let pg_url = postgres_test_url();
-    let redis_url = std::env::var("CHRONON_REDIS_URL")
-        .or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))?;
+    let redis_url =
+        std::env::var("CHRONON_REDIS_URL").or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))?;
     let sql = std::sync::Arc::new(PostgresSchedulerStore::connect_isolated(&pg_url, schema).await?);
     let redis = RedisQueueLayer::connect(&redis_url, Some(redis_prefix)).await?;
-    Ok(std::sync::Arc::new(PostgresRedisSchedulerStore::new(sql, redis)))
+    Ok(std::sync::Arc::new(PostgresRedisSchedulerStore::new(
+        sql, redis,
+    )))
 }
 
-async fn spawn_daemon(
+fn spawn_daemon(
     example: &str,
     instance_id: &str,
     pool: Option<&str>,
@@ -114,7 +117,9 @@ async fn wait_for_terminal_runs(
                 "expected {prefill} terminal runs, got {} after {:?} (statuses: {:?})",
                 done.len(),
                 timeout,
-                runs.iter().map(|r| (&r.run_id, r.status)).collect::<Vec<_>>()
+                runs.iter()
+                    .map(|r| (&r.run_id, r.status))
+                    .collect::<Vec<_>>()
             );
         }
         sleep(Duration::from_millis(500)).await;
@@ -138,14 +143,24 @@ async fn remote_dual_worker_no_double_claim() {
     let mut children: Vec<Child> = Vec::new();
     if mode == "local" {
         children.push(
-            spawn_daemon("worker_daemon", "worker-a", Some("general"), &schema, &redis_prefix)
-                .await
-                .expect("w-a"),
+            spawn_daemon(
+                "worker_daemon",
+                "worker-a",
+                Some("general"),
+                &schema,
+                &redis_prefix,
+            )
+            .expect("w-a"),
         );
         children.push(
-            spawn_daemon("worker_daemon", "worker-b", Some("general"), &schema, &redis_prefix)
-                .await
-                .expect("w-b"),
+            spawn_daemon(
+                "worker_daemon",
+                "worker-b",
+                Some("general"),
+                &schema,
+                &redis_prefix,
+            )
+            .expect("w-b"),
         );
         sleep(Duration::from_secs(2)).await;
     }
@@ -160,7 +175,11 @@ async fn remote_dual_worker_no_double_claim() {
     let prefill = 6usize;
     let now = chrono::Utc::now();
     for i in 0..prefill {
-        let mut run = Run::for_job(&job_id, "daemon-noop", now - chrono::Duration::seconds(i as i64));
+        let mut run = Run::for_job(
+            &job_id,
+            "daemon-noop",
+            now - chrono::Duration::seconds(i as i64),
+        );
         run.pool_id = Some("general".into());
         store.create_run(&run).await.expect("create run");
     }
@@ -170,7 +189,11 @@ async fn remote_dual_worker_no_double_claim() {
         .expect("workers drain queue");
 
     let unique: HashSet<_> = done.iter().map(|r| &r.run_id).collect();
-    assert_eq!(unique.len(), prefill, "duplicate claims across remote workers");
+    assert_eq!(
+        unique.len(),
+        prefill,
+        "duplicate claims across remote workers"
+    );
 
     for child in children {
         stop_child(child).await;

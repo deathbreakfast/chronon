@@ -60,10 +60,7 @@ pub fn ch7_aggregate(
             continue;
         }
         let idx = dims.and_then(|d| d.bench_client_index).unwrap_or(0);
-        by_bc
-            .entry(bc)
-            .or_default()
-            .insert(idx, (report, fname));
+        by_bc.entry(bc).or_default().insert(idx, (report, fname));
     }
 
     if by_bc.is_empty() {
@@ -72,16 +69,16 @@ pub fn ch7_aggregate(
 
     for (bc, clients) in &by_bc {
         if clients.len() != *bc as usize {
-            bail!("bc={bc}: expected {bc} client reports, found {}", clients.len());
+            bail!(
+                "bc={bc}: expected {bc} client reports, found {}",
+                clients.len()
+            );
         }
         let mut total_rate = 0.0_f64;
         let mut template = clients.values().next().expect("non-empty").0.clone();
         let client_refs: Vec<&BenchReport> = clients.values().map(|(r, _)| r).collect();
         for rep in &client_refs {
-            total_rate += rep
-                .claim_ops_per_sec
-                .as_ref()
-                .map_or(0.0, |s| s.max);
+            total_rate += rep.claim_ops_per_sec.as_ref().map_or(0.0, |s| s.max);
         }
         let wall_rate = fleet_wall_claim_rate(&client_refs);
         template.aggregate = Some(true);

@@ -81,7 +81,9 @@ impl SplitHandle {
                 stop.notify_waiters();
             }
             if coordinator_task.is_finished()
-                && worker_tasks.iter().all(tokio::task::JoinHandle::is_finished)
+                && worker_tasks
+                    .iter()
+                    .all(tokio::task::JoinHandle::is_finished)
             {
                 let _ = (&mut coordinator_task).await;
                 for task in worker_tasks {

@@ -37,21 +37,32 @@ pub struct BatchRunParams<'a> {
 
 fn bench_overrides_from_run(args: &RunArgs, is_ch7: bool) -> BenchConfigOverrides {
     BenchConfigOverrides {
-        worker_count: args
-            .worker_count
-            .or_else(|| if is_ch7 { args.ops.map(|o| o as u32) } else { None }),
+        worker_count: args.worker_count.or_else(|| {
+            if is_ch7 {
+                args.ops.map(|o| o as u32)
+            } else {
+                None
+            }
+        }),
         job_count: args.jobs,
         partition_count: args.partitions,
-        prefill_count: args
-            .prefill
-            .or_else(|| if is_ch7 { args.jobs.map(|j| j as u64) } else { None }),
+        prefill_count: args.prefill.or_else(|| {
+            if is_ch7 {
+                args.jobs.map(|j| j as u64)
+            } else {
+                None
+            }
+        }),
         bench_client_index: args.bench_client_index,
         bench_client_count: args.bench_client_count,
         pool_count: args.pool_count,
-        pool_layout: args.pool_layout.as_deref().map(|v| match v.to_ascii_lowercase().as_str() {
-            "distinct" => PoolLayout::Distinct,
-            _ => PoolLayout::Shared,
-        }),
+        pool_layout: args
+            .pool_layout
+            .as_deref()
+            .map(|v| match v.to_ascii_lowercase().as_str() {
+                "distinct" => PoolLayout::Distinct,
+                _ => PoolLayout::Shared,
+            }),
         worker_host_count: args.worker_hosts,
         storage_topology: args.storage_topology.clone(),
         tick_batch_limit: None,
@@ -72,10 +83,7 @@ pub async fn run_single(args: RunArgs) -> Result<()> {
     let plan = resolve_experiment(&args.experiment, args.ops, args.jobs)?;
     let is_ch7 = args.experiment.eq_ignore_ascii_case("bm-ch7")
         || args.experiment.eq_ignore_ascii_case("bm-ch7d");
-    let bench = resolve_bench_config(
-        &args.experiment,
-        bench_overrides_from_run(&args, is_ch7),
-    );
+    let bench = resolve_bench_config(&args.experiment, bench_overrides_from_run(&args, is_ch7));
 
     let ctx = RunContext {
         matrix: matrix.clone(),
@@ -85,10 +93,7 @@ pub async fn run_single(args: RunArgs) -> Result<()> {
     };
 
     let out = run_experiment(&ctx).await?;
-    write_report(
-        &out,
-        &report_path(args.report.as_ref(), &ctx),
-    )?;
+    write_report(&out, &report_path(args.report.as_ref(), &ctx))?;
     Ok(())
 }
 

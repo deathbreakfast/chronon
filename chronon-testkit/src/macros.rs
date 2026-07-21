@@ -287,7 +287,9 @@ macro_rules! matrix_distributed_scenario_suite {
 #[macro_export]
 macro_rules! matrix_postgres_redis_coordinator_suite {
     () => {
-        $crate::invoke_catalog_scenario_ids!($crate::matrix_postgres_redis_coordinator_scenario_suite);
+        $crate::invoke_catalog_scenario_ids!(
+            $crate::matrix_postgres_redis_coordinator_scenario_suite
+        );
     };
 }
 

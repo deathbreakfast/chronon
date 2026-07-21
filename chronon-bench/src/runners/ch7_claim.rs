@@ -23,15 +23,11 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
         let cell_id = std::env::var("CHRONON_BENCH_CELL_ID").unwrap_or_else(|_| {
             format!(
                 "bc{}-w{}-q{}",
-                ctx.bench.bench_client_count,
-                ctx.bench.worker_count,
-                ctx.bench.prefill_count
+                ctx.bench.bench_client_count, ctx.bench.worker_count, ctx.bench.prefill_count
             )
         });
         let is_leader = ctx.bench.bench_client_index == 0;
-        session
-            .install_multibench_cell(&cell_id, is_leader)
-            .await?;
+        session.install_multibench_cell(&cell_id, is_leader).await?;
     } else {
         session.install().await?;
     }
@@ -54,9 +50,13 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
     let mut report = BenchReport::base(&ctx.plan.id, &ctx.matrix);
     report.metric_kind = Some("claim".into());
     report.aggregate = Some(false);
-    report.storage_topology.clone_from(&ctx.bench.storage_topology);
+    report
+        .storage_topology
+        .clone_from(&ctx.bench.storage_topology);
     report.tier_tag.clone_from(&ctx.bench.tier_tag);
-    report.data_tier_profile.clone_from(&ctx.bench.data_tier_profile);
+    report
+        .data_tier_profile
+        .clone_from(&ctx.bench.data_tier_profile);
     report.prefill_elapsed_secs = prefill_elapsed;
     report.drain_elapsed_secs = Some(drain_elapsed);
     report.effective_drain_secs = Some(if drain_elapsed > 15.0 {

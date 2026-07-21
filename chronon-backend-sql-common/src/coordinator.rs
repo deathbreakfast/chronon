@@ -5,15 +5,13 @@
 use chrono::{DateTime, Duration, Utc};
 
 use chronon_core::error::{ChrononError, Result};
+use chronon_core::models::{JobRevision, PartitionAssignment, SchedulerLeader, Script, Worker};
 use sqlx::Row;
-use chronon_core::models::{
-    JobRevision, PartitionAssignment, SchedulerLeader, Script, Worker,
-};
 
 use crate::error_map::map_err;
 use crate::row::{
-    row_to_leader, row_to_partition, row_to_revision, row_to_script,
-    JobRevisionRow, PartitionAssignmentRow, ScriptRow, WorkerRow,
+    row_to_leader, row_to_partition, row_to_revision, row_to_script, JobRevisionRow,
+    PartitionAssignmentRow, ScriptRow, WorkerRow,
 };
 use crate::{bind_sql, sql_execute, sql_fetch_all_map, sql_fetch_optional_map, SqlSchedulerStore};
 
@@ -77,7 +75,10 @@ pub(crate) async fn get_script(
     store: &SqlSchedulerStore,
     script_name: &str,
 ) -> Result<Option<Script>> {
-    let sql = bind_sql(store.dialect, "SELECT * FROM chronon_script WHERE script_name = ?");
+    let sql = bind_sql(
+        store.dialect,
+        "SELECT * FROM chronon_script WHERE script_name = ?",
+    );
     sql_fetch_optional_map!(store, &sql, |q| q.bind(script_name), |r| row_to_script(&r))
 }
 
@@ -108,8 +109,8 @@ pub(crate) async fn try_acquire_leader(
                 .bind(instance_id)
                 .bind(until)
                 .bind(now);
-            match q.fetch_optional(pool).await.map_err(|e| map_err(&e))? {
-                Some(row) => Some(row.try_get("leader_instance_id").map_err(|e| map_err(&e))?),
+            match q.fetch_optional(pool).await.map_err(map_err)? {
+                Some(row) => Some(row.try_get("leader_instance_id").map_err(map_err)?),
                 None => None,
             }
         }
@@ -119,8 +120,8 @@ pub(crate) async fn try_acquire_leader(
                 .bind(instance_id)
                 .bind(until)
                 .bind(now);
-            match q.fetch_optional(pool).await.map_err(|e| map_err(&e))? {
-                Some(row) => Some(row.try_get("leader_instance_id").map_err(|e| map_err(&e))?),
+            match q.fetch_optional(pool).await.map_err(map_err)? {
+                Some(row) => Some(row.try_get("leader_instance_id").map_err(map_err)?),
                 None => None,
             }
         }
@@ -141,7 +142,10 @@ pub(crate) async fn renew_leader_lease(
          WHERE leader_id = ? AND leader_instance_id = ?",
     );
     sql_execute!(store, &sql, |q| {
-        q.bind(until).bind(now).bind(LEADER_ROW_ID).bind(instance_id)
+        q.bind(until)
+            .bind(now)
+            .bind(LEADER_ROW_ID)
+            .bind(instance_id)
     })
 }
 
@@ -150,7 +154,9 @@ pub(crate) async fn get_leader(store: &SqlSchedulerStore) -> Result<Option<Sched
         store.dialect,
         "SELECT * FROM chronon_scheduler_leader WHERE leader_id = ?",
     );
-    sql_fetch_optional_map!(store, &sql, |q| q.bind(LEADER_ROW_ID), |r| row_to_leader(&r))
+    sql_fetch_optional_map!(store, &sql, |q| q.bind(LEADER_ROW_ID), |r| row_to_leader(
+        &r
+    ))
 }
 
 pub(crate) async fn upsert_partition_assignment(
@@ -223,26 +229,22 @@ pub(crate) async fn heartbeat_worker(
         "UPDATE chronon_worker SET last_heartbeat_at = ?, updated_at = ? WHERE worker_id = ?",
     );
     let rows = match &store.pool {
-        crate::SqlPool::Sqlite(pool) => {
-            sqlx::query(&sql)
-                .bind(at)
-                .bind(at)
-                .bind(worker_id)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
-        crate::SqlPool::Postgres(pool) => {
-            sqlx::query(&sql)
-                .bind(at)
-                .bind(at)
-                .bind(worker_id)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
+        crate::SqlPool::Sqlite(pool) => sqlx::query(&sql)
+            .bind(at)
+            .bind(at)
+            .bind(worker_id)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
+        crate::SqlPool::Postgres(pool) => sqlx::query(&sql)
+            .bind(at)
+            .bind(at)
+            .bind(worker_id)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
     };
     if rows == 0 {
         return Err(ChrononError::Internal(format!(

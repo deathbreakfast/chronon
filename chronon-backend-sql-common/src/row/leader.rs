@@ -47,10 +47,10 @@ where
     DateTime<Utc>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
     Ok(SchedulerLeaderRow {
-        leader_id: row.try_get("leader_id").map_err(|e| map_err(&e))?,
-        leader_instance_id: row.try_get("leader_instance_id").map_err(|e| map_err(&e))?,
-        leader_lease_until: row.try_get("leader_lease_until").map_err(|e| map_err(&e))?,
-        last_heartbeat_at: row.try_get("last_heartbeat_at").map_err(|e| map_err(&e))?,
+        leader_id: row.try_get("leader_id").map_err(map_err)?,
+        leader_instance_id: row.try_get("leader_instance_id").map_err(map_err)?,
+        leader_lease_until: row.try_get("leader_lease_until").map_err(map_err)?,
+        last_heartbeat_at: row.try_get("last_heartbeat_at").map_err(map_err)?,
     }
     .to_model())
 }

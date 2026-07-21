@@ -42,10 +42,7 @@ pub fn ch7d_fleet_curve(
         else {
             continue;
         };
-        let rate = report
-            .claim_ops_per_sec
-            .as_ref()
-            .map_or(0.0, |s| s.max);
+        let rate = report.claim_ops_per_sec.as_ref().map_or(0.0, |s| s.max);
         if rate <= 0.0 {
             continue;
         }
@@ -85,7 +82,9 @@ pub fn ch7d_fleet_curve(
     };
 
     let out_path = out.unwrap_or_else(|| {
-        reports_dir.join(format!("scaling-curve-ch7d-fleet-{storage}-{hardware}.json"))
+        reports_dir.join(format!(
+            "scaling-curve-ch7d-fleet-{storage}-{hardware}.json"
+        ))
     });
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -96,7 +95,8 @@ pub fn ch7d_fleet_curve(
 }
 
 fn dedupe_best(points: &mut Vec<WorkerFleetPoint>) {
-    let mut best: std::collections::BTreeMap<u32, WorkerFleetPoint> = std::collections::BTreeMap::new();
+    let mut best: std::collections::BTreeMap<u32, WorkerFleetPoint> =
+        std::collections::BTreeMap::new();
     for p in points.drain(..) {
         best.entry(p.worker_host_count)
             .and_modify(|e| {

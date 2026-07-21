@@ -31,7 +31,11 @@ pub struct ExperimentPlan {
 }
 
 /// Resolve an experiment id and optional CLI overrides into a runnable plan.
-pub fn resolve_experiment(id: &str, ops: Option<usize>, jobs: Option<usize>) -> Result<ExperimentPlan> {
+pub fn resolve_experiment(
+    id: &str,
+    ops: Option<usize>,
+    jobs: Option<usize>,
+) -> Result<ExperimentPlan> {
     let plan = match id {
         "bm-ch0" => ExperimentPlan {
             id: id.into(),
@@ -117,10 +121,7 @@ pub fn subset_experiments(slice: &str) -> Result<Vec<&'static str>> {
         "resilience" => vec!["bm-ch3", "bm-ch4"],
         "telemetry-tax" => vec!["bm-ch0"],
         "cost-tier" => vec!["bm-chl1"],
-        other => bail!(
-            "unknown slice {other}; use {}",
-            MATRIX_SLICES.join("|")
-        ),
+        other => bail!("unknown slice {other}; use {}", MATRIX_SLICES.join("|")),
     };
     Ok(ids)
 }

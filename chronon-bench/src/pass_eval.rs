@@ -13,22 +13,31 @@ pub fn evaluate_verdict(report: &BenchReport) -> Option<String> {
 
     match report.experiment.as_str() {
         "bm-ch7" => {
-            if report
-                .drain_elapsed_secs
-                .is_some_and(|s| s < 10.0)
-            {
+            if report.drain_elapsed_secs.is_some_and(|s| s < 10.0) {
                 return Some("insufficient_sample".into());
             }
             report
                 .claim_ops_per_sec
                 .as_ref()
-                .map(|s| if s.max > 0.0 { "worker_scaling" } else { "no_claims" })
+                .map(|s| {
+                    if s.max > 0.0 {
+                        "worker_scaling"
+                    } else {
+                        "no_claims"
+                    }
+                })
                 .map(str::to_string)
         }
         "bm-ch7d" => report
             .claim_ops_per_sec
             .as_ref()
-            .map(|s| if s.max > 0.0 { "worker_fleet_scaling" } else { "no_claims" })
+            .map(|s| {
+                if s.max > 0.0 {
+                    "worker_fleet_scaling"
+                } else {
+                    "no_claims"
+                }
+            })
             .map(str::to_string),
         id if id.starts_with("bm-chl") => Some("sustain_pass".into()),
         "bm-ch2" => {

@@ -8,8 +8,8 @@ use chronon_scheduler::Scheduler;
 use tokio::sync::Notify;
 
 use crate::builder::DeploymentShape;
-use crate::coordinator_service::CoordinatorService;
 use crate::coordinator::run_coordinator_loops;
+use crate::coordinator_service::CoordinatorService;
 use crate::embedded::run_embedded_loops;
 use crate::events::spawn_event_handler;
 use crate::worker::run_worker_loop;

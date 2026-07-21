@@ -3,7 +3,9 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use chronon_testkit::{seed_due_cron_jobs, BootstrapSession, DeploymentKind, MatrixSpec, NOOP_SCRIPT};
+use chronon_testkit::{
+    seed_due_cron_jobs, BootstrapSession, DeploymentKind, MatrixSpec, NOOP_SCRIPT,
+};
 
 use crate::report::BenchReport;
 use crate::runners::ch7_common::{
@@ -60,15 +62,22 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
     let ops_per_sec = completed as f64 / drain_elapsed;
     let effective_rate = effective_claim_rate(completed, drain_elapsed);
 
-    let mut report = BenchReport::base(&ctx.plan.id, &MatrixSpec {
-        deployment: DeploymentKind::CoordinatorWorker,
-        ..ctx.matrix.clone()
-    });
+    let mut report = BenchReport::base(
+        &ctx.plan.id,
+        &MatrixSpec {
+            deployment: DeploymentKind::CoordinatorWorker,
+            ..ctx.matrix.clone()
+        },
+    );
     report.metric_kind = Some("claim_execute".into());
     report.aggregate = Some(false);
-    report.storage_topology.clone_from(&ctx.bench.storage_topology);
+    report
+        .storage_topology
+        .clone_from(&ctx.bench.storage_topology);
     report.tier_tag.clone_from(&ctx.bench.tier_tag);
-    report.data_tier_profile.clone_from(&ctx.bench.data_tier_profile);
+    report
+        .data_tier_profile
+        .clone_from(&ctx.bench.data_tier_profile);
     report.prefill_elapsed_secs = prefill_elapsed;
     report.drain_elapsed_secs = Some(drain_elapsed);
     report.effective_drain_secs = Some(drain_elapsed);
@@ -92,7 +101,9 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
     });
     if queued_left > 0 {
         report.status = "fail".into();
-        report.error = Some(format!("{queued_left} runs still queued after drain window"));
+        report.error = Some(format!(
+            "{queued_left} runs still queued after drain window"
+        ));
     } else if insufficient_sample(drain_elapsed) {
         report.verdict = Some("insufficient_sample".into());
     }

@@ -1,5 +1,6 @@
 //! Projection curve integration tests.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::fs;
 use std::path::Path;
 
@@ -11,7 +12,11 @@ use chronon_testkit::MatrixSpec;
 fn write_report(dir: &Path, name: &str, mut report: BenchReport) {
     report.hardware = "test-hw".into();
     report.storage = "mem".into();
-    fs::write(dir.join(name), serde_json::to_string_pretty(&report).unwrap()).unwrap();
+    fs::write(
+        dir.join(name),
+        serde_json::to_string_pretty(&report).unwrap(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -51,7 +56,9 @@ fn ch7_worker_curve_reads_sweep_reports() {
     write_report(&path, "bm-ch7-mem-w32.json", r32);
 
     ch7_worker_curve("mem", "test-hw", &path, None).unwrap();
-    assert!(path.join("scaling-curve-ch7-workers-mem-test-hw.json").exists());
+    assert!(path
+        .join("scaling-curve-ch7-workers-mem-test-hw.json")
+        .exists());
 }
 
 #[test]
@@ -76,7 +83,9 @@ fn ch1_job_curve_reads_query_reports() {
     write_report(&path, "bm-ch1-mem-j1k.json", r);
 
     ch1_job_curve("mem", "test-hw", &path, None).unwrap();
-    assert!(path.join("scaling-curve-ch1-jobs-mem-test-hw.json").exists());
+    assert!(path
+        .join("scaling-curve-ch1-jobs-mem-test-hw.json")
+        .exists());
 }
 
 #[test]
@@ -99,5 +108,7 @@ fn chl_sustain_curve_reads_tick_reports() {
     write_report(&path, "bm-chl0-mem.json", r);
 
     chl_sustain_curve("mem", "test-hw", &path, None).unwrap();
-    assert!(path.join("scaling-curve-chl-sustain-mem-test-hw.json").exists());
+    assert!(path
+        .join("scaling-curve-chl-sustain-mem-test-hw.json")
+        .exists());
 }

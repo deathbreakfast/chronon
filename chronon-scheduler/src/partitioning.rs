@@ -16,7 +16,10 @@ pub fn partition_index_for_job_id(job_id: &str, num_partitions: u32) -> u32 {
 ///
 /// Uses [`num_partitions_from_env`] as the modulus at persistence time.
 pub fn partition_hash_i64_for_job_id(job_id: &str) -> i64 {
-    i64::from(partition_index_for_job_id(job_id, num_partitions_from_env()))
+    i64::from(partition_index_for_job_id(
+        job_id,
+        num_partitions_from_env(),
+    ))
 }
 
 /// Default pool when a job has no `pool` set.

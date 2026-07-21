@@ -1,5 +1,6 @@
 //! Integration smoke tests for the Chronon Axum router.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -39,7 +40,7 @@ fn test_state() -> AppState {
     let coordinator = Arc::new(CoordinatorService::new(store));
     let registry = Arc::new({
         let mut r = ScriptRegistry::new();
-        r.register(ScriptDescriptor::new("test_script", noop_invoke));
+        r.register(&ScriptDescriptor::new("test_script", noop_invoke));
         r
     });
     AppState {
@@ -310,7 +311,7 @@ async fn run_now_job_not_found() {
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -386,7 +387,12 @@ async fn get_run_not_found() {
 async fn list_scripts_ok() {
     let app = test_app(test_state());
     let resp = app
-        .oneshot(Request::builder().uri("/scripts").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/scripts")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

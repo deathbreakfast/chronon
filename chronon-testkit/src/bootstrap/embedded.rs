@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::matrix::DeploymentKind;
 
-use super::{EmbeddedHandle, BootstrapSession};
+use super::{BootstrapSession, EmbeddedHandle};
 
 impl BootstrapSession {
     /// Start background loops appropriate for the matrix deployment shape.

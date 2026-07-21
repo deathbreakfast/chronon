@@ -201,8 +201,11 @@ pub trait SchedulerStore: Send + Sync {
     ) -> Result<bool>;
 
     /// Mark a run-once job as finished so future ticks skip it.
-    async fn mark_run_once_completed(&self, job_id: &str, completed_at: DateTime<Utc>)
-        -> Result<()>;
+    async fn mark_run_once_completed(
+        &self,
+        job_id: &str,
+        completed_at: DateTime<Utc>,
+    ) -> Result<()>;
 
     /// Release a run-once claim when enqueue failed or the coordinator shut down cleanly.
     async fn release_run_once_claim(

@@ -10,12 +10,12 @@ macro_rules! sql_execute {
             $crate::SqlPool::Sqlite(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $body;
-                $q.execute(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
+                $q.execute(pool).await.map_err($crate::error_map::map_err)?;
             }
             $crate::SqlPool::Postgres(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $body;
-                $q.execute(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
+                $q.execute(pool).await.map_err($crate::error_map::map_err)?;
             }
         }
         Ok::<(), chronon_core::error::ChrononError>(())
@@ -30,7 +30,11 @@ macro_rules! sql_fetch_optional_map {
             $crate::SqlPool::Sqlite(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                match $q.fetch_optional(pool).await.map_err(|e| $crate::error_map::map_err(&e))? {
+                match $q
+                    .fetch_optional(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?
+                {
                     Some($row) => Ok(Some($map?)),
                     None => Ok(None),
                 }
@@ -38,7 +42,11 @@ macro_rules! sql_fetch_optional_map {
             $crate::SqlPool::Postgres(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                match $q.fetch_optional(pool).await.map_err(|e| $crate::error_map::map_err(&e))? {
+                match $q
+                    .fetch_optional(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?
+                {
                     Some($row) => Ok(Some($map?)),
                     None => Ok(None),
                 }
@@ -55,13 +63,19 @@ macro_rules! sql_fetch_one_map {
             $crate::SqlPool::Sqlite(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                let $row = $q.fetch_one(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
+                let $row = $q
+                    .fetch_one(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?;
                 $map
             }
             $crate::SqlPool::Postgres(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                let $row = $q.fetch_one(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
+                let $row = $q
+                    .fetch_one(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?;
                 $map
             }
         }
@@ -76,14 +90,24 @@ macro_rules! sql_fetch_all_map {
             $crate::SqlPool::Sqlite(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                let rows = $q.fetch_all(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
-                rows.iter().map(|$row| $map).collect::<chronon_core::Result<Vec<_>>>()
+                let rows = $q
+                    .fetch_all(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?;
+                rows.iter()
+                    .map(|$row| $map)
+                    .collect::<chronon_core::Result<Vec<_>>>()
             }
             $crate::SqlPool::Postgres(pool) => {
                 let $q = sqlx::query($sql);
                 let $q = $bind;
-                let rows = $q.fetch_all(pool).await.map_err(|e| $crate::error_map::map_err(&e))?;
-                rows.iter().map(|$row| $map).collect::<chronon_core::Result<Vec<_>>>()
+                let rows = $q
+                    .fetch_all(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?;
+                rows.iter()
+                    .map(|$row| $map)
+                    .collect::<chronon_core::Result<Vec<_>>>()
             }
         }
     }};

@@ -22,7 +22,7 @@ impl SchedulerStore for InMemorySchedulerStore {
     }
 
     async fn get_job_by_name(&self, job_name: &str) -> Result<Option<Job>> {
-        jobs::get_job_by_name(self, job_name).await
+        jobs::get_job_by_name(self, job_name)
     }
 
     async fn list_jobs(&self) -> Result<Vec<Job>> {
@@ -46,7 +46,7 @@ impl SchedulerStore for InMemorySchedulerStore {
     }
 
     async fn update_run(&self, run: &Run) -> Result<()> {
-        runs::create_run(self, run)
+        runs::update_run(self, run)
     }
 
     async fn get_run(&self, run_id: &str) -> Result<Option<Run>> {

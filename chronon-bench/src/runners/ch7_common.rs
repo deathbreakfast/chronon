@@ -146,9 +146,7 @@ pub async fn wait_for_queued_runs(
         }
         tokio::time::sleep(Duration::from_millis(DRAIN_POLL_MS)).await;
     }
-    bail!(
-        "timed out after {timeout_secs:.1}s waiting for >= {min_count} queued runs"
-    );
+    bail!("timed out after {timeout_secs:.1}s waiting for >= {min_count} queued runs");
 }
 
 /// Drain one worker against `pool_id`, polling until idle when multibench (bc > 1).
@@ -297,10 +295,7 @@ pub fn insufficient_sample(drain_secs: f64) -> bool {
 }
 
 fn env_truthy(name: &str) -> bool {
-    matches!(
-        std::env::var(name).as_deref(),
-        Ok("1" | "true" | "TRUE")
-    )
+    matches!(std::env::var(name).as_deref(), Ok("1" | "true" | "TRUE"))
 }
 
 fn env_f64(name: &str) -> Option<f64> {
@@ -427,9 +422,7 @@ mod tests {
         prefill_runs(store.clone(), &leader, "c0")
             .await
             .expect("prefill");
-        let claimed = run_drain_workers(store, &drain_only)
-            .await
-            .expect("drain");
+        let claimed = run_drain_workers(store, &drain_only).await.expect("drain");
         std::env::remove_var("CHRONON_CH7_DRAIN_IDLE_SECS");
         assert_eq!(claimed, 50);
     }
