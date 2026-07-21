@@ -27,7 +27,8 @@ async fn main() -> chronon::Result<()> {
     let redis_url = std::env::var("CHRONON_REDIS_URL")
         .or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))
         .unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
-    let instance_id = std::env::var("CHRONON_INSTANCE_ID").unwrap_or_else(|_| "coordinator-0".into());
+    let instance_id =
+        std::env::var("CHRONON_INSTANCE_ID").unwrap_or_else(|_| "coordinator-0".into());
 
     let sql: Arc<dyn SchedulerStore> = Arc::new(postgres_store_from_env().await?);
     let redis_prefix = std::env::var("CHRONON_REDIS_PREFIX").ok();
@@ -36,7 +37,7 @@ async fn main() -> chronon::Result<()> {
 
     let registry = Arc::new({
         let mut r = ScriptRegistry::new();
-        r.register(ScriptDescriptor::new("daemon-noop", noop_script));
+        r.register(&ScriptDescriptor::new("daemon-noop", noop_script));
         r
     });
 
@@ -49,6 +50,6 @@ async fn main() -> chronon::Result<()> {
         .build()?;
 
     chronon.scheduler.init_partitions().await;
-    eprintln!("coordinator_daemon: running ({pg_url}, {redis_url})");
+    eeprintln!("coordinator_daemon: running ({pg_url}, {redis_url})");
     chronon.run().await
 }

@@ -72,12 +72,16 @@ impl Scheduler {
         } else if self.assigner.refresh_leases().await.is_err() {
             self.telemetry.log_event(
                 "chronon_scheduler_warn",
-                &[("component", "scheduler"), ("message", "initial partition refresh failed")],
+                &[
+                    ("component", "scheduler"),
+                    ("message", "initial partition refresh failed"),
+                ],
             );
         }
     }
 
     /// Execute one scheduler tick (due query + enqueue + telemetry).
+    #[tracing::instrument(skip(self), fields(instance_id = %self.config.instance_id))]
     pub async fn tick_once(&self) -> chronon_core::Result<TickResult> {
         let mut draining = false;
         Ok(run_one_tick(

@@ -81,7 +81,7 @@ impl SqlSchedulerStore {
             .max_connections(5)
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         Self::from_sqlite_pool(pool).await
     }
 
@@ -95,7 +95,7 @@ impl SqlSchedulerStore {
             .max_connections(postgres_max_connections())
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         Self::from_postgres_pool(pool).await
     }
 
@@ -109,9 +109,9 @@ impl SqlSchedulerStore {
             .max_connections(1)
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         let ddl = format!("CREATE SCHEMA IF NOT EXISTS \"{schema}\"");
-        admin.execute(ddl.as_str()).await.map_err(|e| map_err(&e))?;
+        admin.execute(ddl.as_str()).await.map_err(map_err)?;
         drop(admin);
 
         let schema = schema.to_string();
@@ -127,7 +127,7 @@ impl SqlSchedulerStore {
             })
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         Self::from_postgres_pool(pool).await
     }
 
@@ -152,7 +152,7 @@ impl SqlSchedulerStore {
             })
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         Ok(Self {
             pool: SqlPool::Postgres(pool),
             dialect: SqlDialect::Postgres,
@@ -202,10 +202,10 @@ impl SqlSchedulerStore {
     pub(crate) async fn run_ddl(&self, ddl: &str) -> Result<()> {
         match &self.pool {
             SqlPool::Sqlite(pool) => {
-                pool.execute(ddl).await.map_err(|e| map_err(&e))?;
+                pool.execute(ddl).await.map_err(map_err)?;
             }
             SqlPool::Postgres(pool) => {
-                pool.execute(ddl).await.map_err(|e| map_err(&e))?;
+                pool.execute(ddl).await.map_err(map_err)?;
             }
         }
         Ok(())
@@ -221,9 +221,9 @@ impl SqlSchedulerStore {
             .max_connections(1)
             .connect(url)
             .await
-            .map_err(|e| map_err(&e))?;
+            .map_err(map_err)?;
         let ddl = format!("DROP SCHEMA IF EXISTS \"{schema}\" CASCADE");
-        admin.execute(ddl.as_str()).await.map_err(|e| map_err(&e))?;
+        admin.execute(ddl.as_str()).await.map_err(map_err)?;
         Ok(())
     }
 }

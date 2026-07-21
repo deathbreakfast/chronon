@@ -35,22 +35,16 @@ pub fn ch7_data_curve(
     let mut points = Vec::new();
 
     for report in &reports {
-        let topo = report
-            .storage_topology
-            .clone()
-            .or_else(|| {
-                report
-                    .sweep_dimensions
-                    .as_ref()
-                    .and_then(|d| d.storage_topology.clone())
-            });
+        let topo = report.storage_topology.clone().or_else(|| {
+            report
+                .sweep_dimensions
+                .as_ref()
+                .and_then(|d| d.storage_topology.clone())
+        });
         let Some(topo) = topo else {
             continue;
         };
-        let rate = report
-            .claim_ops_per_sec
-            .as_ref()
-            .map_or(0.0, |s| s.max);
+        let rate = report.claim_ops_per_sec.as_ref().map_or(0.0, |s| s.max);
         if rate <= 0.0 {
             continue;
         }

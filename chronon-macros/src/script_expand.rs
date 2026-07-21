@@ -20,8 +20,8 @@ pub(crate) fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-pub(crate) fn expand_script(attrs: ScriptAttrs, input: ItemFn) -> syn::Result<TokenStream2> {
-    let script_name = attrs.name;
+pub(crate) fn expand_script(attrs: &ScriptAttrs, input: &ItemFn) -> syn::Result<TokenStream2> {
+    let script_name = attrs.name.as_str();
     let fn_name = &input.sig.ident;
     let fn_vis = &input.vis;
     let fn_block = &input.block;
@@ -31,26 +31,26 @@ pub(crate) fn expand_script(attrs: ScriptAttrs, input: ItemFn) -> syn::Result<To
     let (signature_json, signature_hash) = build_signature_metadata(&params)?;
 
     let fn_name_pascal = to_pascal_case(&fn_name.to_string());
-    let params_struct_name = syn::Ident::new(&format!("{}Params", fn_name_pascal), fn_name.span());
+    let params_struct_name = syn::Ident::new(&format!("{fn_name_pascal}Params"), fn_name.span());
     let script_type_name_str = if fn_name_pascal.ends_with("Script") {
         fn_name_pascal
     } else {
-        format!("{}Script", fn_name_pascal)
+        format!("{fn_name_pascal}Script")
     };
     let script_type_name = syn::Ident::new(&script_type_name_str, fn_name.span());
     let is_unit_struct = params.is_empty();
 
     let params_struct =
         generate_params_struct(fn_vis, &params_struct_name, &params, is_unit_struct);
-    let handle_fn = generate_handle_function(fn_vis, fn_name, &params_struct_name, &script_name);
+    let handle_fn = generate_handle_function(fn_vis, fn_name, &params_struct_name, script_name);
     let script_type_api =
-        generate_script_type_api(fn_vis, &script_type_name, &params_struct_name, &script_name);
+        generate_script_type_api(fn_vis, &script_type_name, &params_struct_name, script_name);
     let internal_sig = generate_internal_signature(fn_sig, fn_name);
     let internal_fn_name = &internal_sig.ident;
     let deserialize_code = generate_deserialization_code(&params_struct_name, is_unit_struct);
     let invoke_script = generate_invoke_script(internal_fn_name, &params, is_unit_struct)?;
     let signature_json_lit = LitStr::new(&signature_json, fn_name.span());
-    let script_name_lit = LitStr::new(&script_name, fn_name.span());
+    let script_name_lit = LitStr::new(script_name, fn_name.span());
 
     Ok(quote! {
         #params_struct
@@ -95,7 +95,7 @@ fn build_signature_metadata(params: &[&PatType]) -> syn::Result<(String, u64)> {
     let signature_json = serde_json::to_string(&signature).map_err(|e| {
         syn::Error::new(
             proc_macro2::Span::call_site(),
-            format!("failed to build script signature metadata: {}", e),
+            format!("failed to build script signature metadata: {e}"),
         )
     })?;
     let mut hasher = DefaultHasher::new();
@@ -158,7 +158,7 @@ fn generate_script_type_api(
 
 fn generate_internal_signature(fn_sig: &Signature, fn_name: &syn::Ident) -> Signature {
     let mut internal_sig = fn_sig.clone();
-    internal_sig.ident = syn::Ident::new(&format!("__{}_impl", fn_name), fn_name.span());
+    internal_sig.ident = syn::Ident::new(&format!("__{fn_name}_impl"), fn_name.span());
     internal_sig
 }
 
@@ -235,7 +235,7 @@ mod tests {
                 Ok(())
             }
         };
-        let tokens = expand_script(attrs, input).expect("expand");
+        let tokens = expand_script(&attrs, &input).expect("expand");
         let expanded = tokens.to_string();
         assert!(expanded.contains("ScriptDescriptor"));
         assert!(expanded.contains("inventory"));

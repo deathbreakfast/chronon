@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
-use chronon_core::models::{Job, JobRevision, Run, RunStatus, ScheduleKind, Script, Worker, WorkerStatus};
+use chronon_core::models::{
+    Job, JobRevision, Run, RunStatus, ScheduleKind, Script, Worker, WorkerStatus,
+};
 use chronon_core::store::SchedulerStore;
 use chronon_core::Result;
 use serde_json::json;
@@ -17,11 +19,7 @@ fn cron_job_due(name: &str, partition_hash: i64) -> Job {
     job
 }
 
-fn queued_run(
-    job_id: &str,
-    pool_id: Option<&str>,
-    scheduled_for: chrono::DateTime<Utc>,
-) -> Run {
+fn queued_run(job_id: &str, pool_id: Option<&str>, scheduled_for: chrono::DateTime<Utc>) -> Run {
     let mut run = Run::for_job(job_id, "script-a", scheduled_for);
     run.pool_id = pool_id.map(str::to_string);
     run
@@ -56,10 +54,7 @@ async fn upsert_job_roundtrip_by_name(store: &dyn SchedulerStore) -> Result<()> 
     let by_id = store.get_job(&job_id).await?.expect("found");
     assert_eq!(by_id.job_name, "nightly");
 
-    let by_name = store
-        .get_job_by_name("nightly")
-        .await?
-        .expect("found");
+    let by_name = store.get_job_by_name("nightly").await?.expect("found");
     assert_eq!(by_name.job_id, job_id);
     Ok(())
 }
@@ -137,9 +132,7 @@ async fn find_due_skips_completed_run_once(store: &dyn SchedulerStore) -> Result
     let job_id = job.job_id.clone();
     store.upsert_job(&job).await?;
 
-    store
-        .mark_run_once_completed(&job_id, Utc::now())
-        .await?;
+    store.mark_run_once_completed(&job_id, Utc::now()).await?;
 
     let until = Utc::now() + Duration::milliseconds(50);
     let due = store
@@ -167,9 +160,7 @@ async fn try_claim_run_once_lease_contention(store: &dyn SchedulerStore) -> Resu
             .await?
     );
 
-    store
-        .mark_run_once_completed(&job_id, Utc::now())
-        .await?;
+    store.mark_run_once_completed(&job_id, Utc::now()).await?;
     assert!(
         !store
             .try_claim_run_once(&job_id, "coord-c", now, 60)
@@ -215,20 +206,10 @@ async fn renew_run_lease_requires_matching_worker(store: &dyn SchedulerStore) ->
     let run_id = run.run_id.clone();
     store.create_run(&run).await?;
 
-    store
-        .claim_next_queued("pool", "worker-a", now, 30)
-        .await?;
+    store.claim_next_queued("pool", "worker-a", now, 30).await?;
 
-    assert!(
-        store
-            .renew_run_lease(&run_id, "worker-a", now, 60)
-            .await?
-    );
-    assert!(
-        !store
-            .renew_run_lease(&run_id, "worker-b", now, 60)
-            .await?
-    );
+    assert!(store.renew_run_lease(&run_id, "worker-a", now, 60).await?);
+    assert!(!store.renew_run_lease(&run_id, "worker-b", now, 60).await?);
     Ok(())
 }
 
@@ -312,8 +293,16 @@ async fn run_once_double_claim_rejected(store: &dyn SchedulerStore) -> Result<()
     store.upsert_job(&job).await?;
 
     let now = Utc::now();
-    assert!(store.try_claim_run_once(&job_id, "coord-a", now, 60).await?);
-    assert!(!store.try_claim_run_once(&job_id, "coord-b", now, 60).await?);
+    assert!(
+        store
+            .try_claim_run_once(&job_id, "coord-a", now, 60)
+            .await?
+    );
+    assert!(
+        !store
+            .try_claim_run_once(&job_id, "coord-b", now, 60)
+            .await?
+    );
     Ok(())
 }
 
@@ -323,7 +312,11 @@ async fn concurrent_claim_next_queued_exclusive(store: Arc<dyn SchedulerStore>) 
     let now = Utc::now();
     let prefill = 16usize;
     for i in 0..prefill {
-        let run = queued_run("concurrent-job", Some("general"), now - Duration::seconds(i as i64));
+        let run = queued_run(
+            "concurrent-job",
+            Some("general"),
+            now - Duration::seconds(i as i64),
+        );
         store.create_run(&run).await?;
     }
 
@@ -349,9 +342,9 @@ async fn concurrent_claim_next_queued_exclusive(store: Arc<dyn SchedulerStore>) 
 
     let mut all_run_ids = Vec::new();
     for handle in handles {
-        let ids = handle.await.map_err(|e| {
-            chronon_core::ChrononError::Internal(format!("join: {e}"))
-        })??;
+        let ids = handle
+            .await
+            .map_err(|e| chronon_core::ChrononError::Internal(format!("join: {e}")))??;
         all_run_ids.extend(ids);
     }
 
@@ -362,10 +355,6 @@ async fn concurrent_claim_next_queued_exclusive(store: Arc<dyn SchedulerStore>) 
         all_run_ids.len()
     );
     let unique: HashSet<_> = all_run_ids.iter().collect();
-    assert_eq!(
-        unique.len(),
-        prefill,
-        "duplicate run_id claims detected"
-    );
+    assert_eq!(unique.len(), prefill, "duplicate run_id claims detected");
     Ok(())
 }

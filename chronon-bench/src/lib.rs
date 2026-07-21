@@ -19,6 +19,13 @@
 //! assert_eq!(cfg.worker_count, 32);
 //! ```
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::print_stdout,
+    clippy::unused_async
+)]
+
 pub mod cli;
 pub mod config;
 pub mod experiments;

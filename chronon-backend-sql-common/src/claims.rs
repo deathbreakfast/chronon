@@ -34,34 +34,30 @@ pub(crate) async fn try_claim_run_once(
            )",
     );
     let rows = match &store.pool {
-        crate::SqlPool::Sqlite(pool) => {
-            sqlx::query(&sql)
-                .bind(now)
-                .bind(claimed_by)
-                .bind(expires)
-                .bind(now)
-                .bind(job_id)
-                .bind(now)
-                .bind(claimed_by)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
-        crate::SqlPool::Postgres(pool) => {
-            sqlx::query(&sql)
-                .bind(now)
-                .bind(claimed_by)
-                .bind(expires)
-                .bind(now)
-                .bind(job_id)
-                .bind(now)
-                .bind(claimed_by)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
+        crate::SqlPool::Sqlite(pool) => sqlx::query(&sql)
+            .bind(now)
+            .bind(claimed_by)
+            .bind(expires)
+            .bind(now)
+            .bind(job_id)
+            .bind(now)
+            .bind(claimed_by)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
+        crate::SqlPool::Postgres(pool) => sqlx::query(&sql)
+            .bind(now)
+            .bind(claimed_by)
+            .bind(expires)
+            .bind(now)
+            .bind(job_id)
+            .bind(now)
+            .bind(claimed_by)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
     };
     Ok(rows > 0)
 }
@@ -81,7 +77,10 @@ pub(crate) async fn mark_run_once_completed(
             updated_at = ?
          WHERE job_id = ?",
     );
-    sql_execute!(store, &sql, |q| q.bind(completed_at).bind(completed_at).bind(job_id))?;
+    sql_execute!(store, &sql, |q| q
+        .bind(completed_at)
+        .bind(completed_at)
+        .bind(job_id))?;
     Ok(())
 }
 
@@ -133,15 +132,18 @@ pub(crate) async fn find_due_job_ids_in_partitions(
              LIMIT ?"
         ),
     );
-    sql_fetch_all_map!(store, &sql, |q| {
-        let mut q = q.bind(due_until);
-        for p in owned_partitions {
-            q = q.bind(i64::from(*p));
-        }
-        q.bind(now).bind(i64::from(limit))
-    }, |r| {
-        Ok::<String, ChrononError>(r.get("job_id"))
-    })
+    sql_fetch_all_map!(
+        store,
+        &sql,
+        |q| {
+            let mut q = q.bind(due_until);
+            for p in owned_partitions {
+                q = q.bind(i64::from(*p));
+            }
+            q.bind(now).bind(i64::from(limit))
+        },
+        |r| { Ok::<String, ChrononError>(r.get("job_id")) }
+    )
 }
 
 pub(crate) async fn min_next_run_at_in_partitions(
@@ -166,16 +168,21 @@ pub(crate) async fn min_next_run_at_in_partitions(
                AND partition_hash IN ({placeholders})"
         ),
     );
-    sql_fetch_one_map!(store, &sql, |q| {
-        let mut q = q;
-        for p in owned_partitions {
-            q = q.bind(i64::from(*p));
+    sql_fetch_one_map!(
+        store,
+        &sql,
+        |q| {
+            let mut q = q;
+            for p in owned_partitions {
+                q = q.bind(i64::from(*p));
+            }
+            q
+        },
+        |r| {
+            Ok(r.try_get::<Option<DateTime<Utc>>, _>("min_next")
+                .map_err(map_err)?)
         }
-        q
-    }, |r| {
-        Ok(r.try_get::<Option<DateTime<Utc>>, _>("min_next")
-            .map_err(|e| map_err(&e))?)
-    })
+    )
 }
 
 pub(crate) async fn claim_job_for_tick(
@@ -197,38 +204,31 @@ pub(crate) async fn claim_job_for_tick(
            AND (claim_lease_until IS NULL OR claim_lease_until < ?)",
     );
     let rows = match &store.pool {
-        crate::SqlPool::Sqlite(pool) => {
-            sqlx::query(&sql)
-                .bind(claim_id)
-                .bind(until)
-                .bind(now)
-                .bind(job_id)
-                .bind(now)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
-        crate::SqlPool::Postgres(pool) => {
-            sqlx::query(&sql)
-                .bind(claim_id)
-                .bind(until)
-                .bind(now)
-                .bind(job_id)
-                .bind(now)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
+        crate::SqlPool::Sqlite(pool) => sqlx::query(&sql)
+            .bind(claim_id)
+            .bind(until)
+            .bind(now)
+            .bind(job_id)
+            .bind(now)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
+        crate::SqlPool::Postgres(pool) => sqlx::query(&sql)
+            .bind(claim_id)
+            .bind(until)
+            .bind(now)
+            .bind(job_id)
+            .bind(now)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
     };
     Ok(rows > 0)
 }
 
-pub(crate) async fn release_job_tick_claim(
-    store: &SqlSchedulerStore,
-    job_id: &str,
-) -> Result<()> {
+pub(crate) async fn release_job_tick_claim(store: &SqlSchedulerStore, job_id: &str) -> Result<()> {
     let sql = bind_sql(
         store.dialect,
         "UPDATE chronon_job SET claim_lease_id = NULL, claim_lease_until = NULL, updated_at = ?

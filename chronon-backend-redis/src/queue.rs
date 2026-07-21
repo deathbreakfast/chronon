@@ -253,8 +253,9 @@ fn format_ready_key(prefix: &str, pool_id: &str, hash_tags: bool) -> String {
     }
 }
 
-fn map_err(e: impl std::fmt::Display) -> ChrononError {
-    ChrononError::StorageError(e.to_string())
+fn map_err(e: impl std::error::Error + Send + Sync + 'static) -> ChrononError {
+    let message = e.to_string();
+    ChrononError::storage_source(message, e)
 }
 
 #[cfg(test)]
@@ -350,10 +351,7 @@ mod tests {
                 .await
                 .expect("enqueue");
         }
-        let batch = layer
-            .claim_next_run_ids(pool, 2, now)
-            .await
-            .expect("batch");
+        let batch = layer.claim_next_run_ids(pool, 2, now).await.expect("batch");
         assert_eq!(batch.len(), 2);
     }
 }

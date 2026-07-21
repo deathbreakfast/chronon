@@ -52,7 +52,9 @@ impl<'a> ScenarioRunner<'a> {
         };
 
         for (step_index, step) in spec.steps.iter().enumerate() {
-            let step_result = self.run_step(step_index, step, mode, &mut step_timings, &mut last_tick).await;
+            let step_result = self
+                .run_step(step_index, step, mode, &mut step_timings, &mut last_tick)
+                .await;
             if let Err(e) = step_result {
                 result.error = Some(e.to_string());
                 result.step_timings = step_timings;

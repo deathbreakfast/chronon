@@ -13,10 +13,7 @@ use chronon::prelude::*;
 use chronon_backend_mem::InMemorySchedulerStore;
 
 #[chronon::script(name = "nightly_cleanup")]
-async fn nightly_cleanup(
-    ctx: Box<dyn ScriptContext>,
-    retention_days: u32,
-) -> chronon::Result<()> {
+async fn nightly_cleanup(ctx: Box<dyn ScriptContext>, retention_days: u32) -> chronon::Result<()> {
     let _ = (ctx.label(), retention_days);
     Ok(())
 }
@@ -31,12 +28,8 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = nightly_cleanup().job_with_params(
-        "nightly-job",
-        &NightlyCleanupParams {
-            retention_days: 7,
-        },
-    )?;
+    let mut job = nightly_cleanup()
+        .job_with_params("nightly-job", &NightlyCleanupParams { retention_days: 7 })?;
     job.schedule_kind = ScheduleKind::RunOnce;
     job.next_run_at = Some(Utc::now() - Duration::seconds(60));
     chronon.coordinator_service().upsert_job(job).await?;
@@ -45,9 +38,6 @@ async fn main() -> chronon::Result<()> {
     let tick = chronon.tick_once().await?;
     assert!(tick.enqueued >= 1);
 
-    println!(
-        "handle-built job; tick enqueued {} run(s)",
-        tick.enqueued
-    );
+    eprintln!("handle-built job; tick enqueued {} run(s)", tick.enqueued);
     Ok(())
 }

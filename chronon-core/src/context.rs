@@ -85,7 +85,7 @@ pub trait ScriptContext: Send {
 pub trait ContextFactory: Send + Sync {
     /// Reconstruct handler context from actor JSON stored on the job.
     ///
-    /// Returns [`IdentityError`] (mapped to [`ChrononError::Internal`]) when the payload
+    /// Returns [`IdentityError`] (mapped to [`ChrononError::Identity`]) when the payload
     /// cannot be decoded into application identity.
     fn build(&self, actor_json: &Value) -> Result<Box<dyn ScriptContext>>;
 }
@@ -97,7 +97,7 @@ pub struct IdentityError(pub String);
 
 impl From<IdentityError> for ChrononError {
     fn from(value: IdentityError) -> Self {
-        Self::Internal(value.0)
+        Self::Identity(value.0)
     }
 }
 

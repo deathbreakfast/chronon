@@ -1,6 +1,9 @@
 use super::TelemetrySink;
 
 /// Writes telemetry to stderr (development and bench).
+///
+/// When a `tracing` subscriber is installed, [`Self::log_event`] also emits a structured
+/// `tracing::info` event so host logs and stderr stay aligned.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ConsoleSink;
 
@@ -15,5 +18,6 @@ impl TelemetrySink for ConsoleSink {
 
     fn log_event(&self, schema: &str, fields: &[(&str, &str)]) {
         eprintln!("[chronon] event {schema} {fields:?}");
+        tracing::info!(target: "chronon_telemetry", schema, ?fields, "telemetry event");
     }
 }

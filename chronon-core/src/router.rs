@@ -5,7 +5,9 @@
 //! [`DEFAULT_STORE_NAME`] for single-store setups.
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock};
+
+use parking_lot::RwLock;
 
 use crate::error::{ChrononError, Result};
 use crate::store::SchedulerStore;
@@ -86,13 +88,8 @@ impl StoreRouter {
     /// StoreRouter::register_global(DEFAULT_STORE_NAME, store);
     /// # }
     /// ```
-    ///
-    /// Panics if the global router lock is poisoned.
     pub fn register_global(name: impl Into<String>, store: Arc<dyn SchedulerStore>) {
-        global_router()
-            .write()
-            .expect("StoreRouter lock poisoned")
-            .register(name, store);
+        global_router().write().register(name, store);
     }
 }
 
@@ -103,7 +100,6 @@ impl StoreRouter {
 pub fn default_store_from_global() -> Result<Arc<dyn SchedulerStore>> {
     global_router()
         .read()
-        .expect("StoreRouter lock poisoned")
         .get(DEFAULT_STORE_NAME)
-        .ok_or_else(|| ChrononError::StorageError("no default SchedulerStore registered".into()))
+        .ok_or_else(|| ChrononError::storage("no default SchedulerStore registered"))
 }

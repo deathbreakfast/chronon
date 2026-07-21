@@ -81,7 +81,9 @@ fn update_bc1_peak(peak: &mut Option<(f64, u32)>, rate: f64, workers: u32) {
 
 fn record_best(map: &mut HashMap<u32, f64>, bc: u32, rate: f64) {
     if rate > 0.0 {
-        map.entry(bc).and_modify(|e| *e = e.max(rate)).or_insert(rate);
+        map.entry(bc)
+            .and_modify(|e| *e = e.max(rate))
+            .or_insert(rate);
     }
 }
 

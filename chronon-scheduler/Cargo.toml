@@ -21,6 +21,7 @@ chronon-telemetry = { workspace = true }
 croner = { workspace = true }
 chrono-tz = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 xxhash-rust = { workspace = true }
 

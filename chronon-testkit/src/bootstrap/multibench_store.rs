@@ -30,11 +30,14 @@ pub fn bench_cell_namespace(cell_id: &str) -> String {
 }
 
 async fn postgres_cell_ready(store: &PostgresSchedulerStore) -> bool {
-    store.list_jobs().await.is_ok()
-        && store.list_runs_filtered(None, None, 0, 1).await.is_ok()
+    store.list_jobs().await.is_ok() && store.list_runs_filtered(None, None, 0, 1).await.is_ok()
 }
 
-async fn attach_postgres_with_wait(url: &str, schema: &str, timeout_secs: f64) -> Result<PostgresSchedulerStore> {
+async fn attach_postgres_with_wait(
+    url: &str,
+    schema: &str,
+    timeout_secs: f64,
+) -> Result<PostgresSchedulerStore> {
     let deadline = Instant::now() + Duration::from_secs_f64(timeout_secs);
     loop {
         let ready = match PostgresSchedulerStore::attach_isolated(url, schema).await {
@@ -90,9 +93,7 @@ impl BootstrapSession {
                 let backend = if is_leader {
                     Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?)
                 } else {
-                    Arc::new(
-                        attach_postgres_with_wait(&url, &schema, attach_wait_secs()).await?,
-                    )
+                    Arc::new(attach_postgres_with_wait(&url, &schema, attach_wait_secs()).await?)
                 };
                 self.postgres_schema = Some(schema);
                 backend
@@ -105,9 +106,7 @@ impl BootstrapSession {
                 let sql = if is_leader {
                     Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?)
                 } else {
-                    Arc::new(
-                        attach_postgres_with_wait(&url, &schema, attach_wait_secs()).await?,
-                    )
+                    Arc::new(attach_postgres_with_wait(&url, &schema, attach_wait_secs()).await?)
                 };
                 let redis_url = std::env::var("CHRONON_REDIS_URL")
                     .or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))

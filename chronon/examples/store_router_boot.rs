@@ -15,6 +15,6 @@ fn main() -> chronon::Result<()> {
         .build()?;
 
     assert_eq!(chronon.executor().script_count(), 0);
-    println!("Chronon booted from global mem store");
+    eprintln!("Chronon booted from global mem store");
     Ok(())
 }

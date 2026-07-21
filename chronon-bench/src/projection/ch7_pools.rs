@@ -37,17 +37,10 @@ pub fn ch7_pool_curve(
     let mut points = Vec::new();
 
     for report in &reports {
-        let Some(k) = report
-            .sweep_dimensions
-            .as_ref()
-            .and_then(|d| d.pool_count)
-        else {
+        let Some(k) = report.sweep_dimensions.as_ref().and_then(|d| d.pool_count) else {
             continue;
         };
-        let rate = report
-            .claim_ops_per_sec
-            .as_ref()
-            .map_or(0.0, |s| s.max);
+        let rate = report.claim_ops_per_sec.as_ref().map_or(0.0, |s| s.max);
         if rate <= 0.0 {
             continue;
         }

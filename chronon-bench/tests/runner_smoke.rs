@@ -1,5 +1,6 @@
 //! Integration smoke tests for benchmark runners (no external DB).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use chronon_bench::cli::bench_config::{resolve_bench_config, BenchConfigOverrides};
 use chronon_bench::config::BenchRunConfig;
 use chronon_bench::experiments::resolve_experiment;

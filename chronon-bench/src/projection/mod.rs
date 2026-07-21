@@ -50,9 +50,6 @@ pub fn project_curve(
         "ch7d-fleet-curve" => ch7d_fleet_curve(storage, hardware, reports_dir, out),
         "ch1-job-curve" => ch1_job_curve(storage, hardware, reports_dir, out),
         "chl-sustain-curve" => chl_sustain_curve(storage, hardware, reports_dir, out),
-        other => bail!(
-            "unknown curve kind {other}; use {}",
-            CURVE_KINDS.join("|")
-        ),
+        other => bail!("unknown curve kind {other}; use {}", CURVE_KINDS.join("|")),
     }
 }

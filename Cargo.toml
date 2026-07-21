@@ -58,6 +58,8 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
 croner = "2"
 chrono-tz = "0.10"
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
@@ -74,29 +76,30 @@ redis = { version = "0.27", default-features = false, features = ["tokio-comp", 
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+# Low-signal / Chronon naming and intentional numeric casts
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-doc_markdown = "allow"
-significant_drop_tightening = "allow"
-unused_async = "allow"
-unnecessary_wraps = "allow"
-use_self = "allow"
+return_self_not_must_use = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
 cast_sign_loss = "allow"
-ignored_unit_patterns = "allow"
-needless_pass_by_value = "allow"
+cast_precision_loss = "allow"
 missing_const_for_fn = "allow"
 duration_suboptimal_units = "allow"
-return_self_not_must_use = "allow"
 redundant_pub_crate = "allow"
-uninlined_format_args = "allow"
 option_if_let_else = "allow"
-redundant_closure_for_method_calls = "allow"
-redundant_closure = "allow"
-cast_precision_loss = "allow"
+# Doc volume — keep allowed until a dedicated rustdoc pass; `missing_docs` already denied
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+# Mem/SQL helpers return `Result` to match `SchedulerStore`; lock guards span full critical sections
+unnecessary_wraps = "allow"
+significant_drop_tightening = "allow"
+# Restriction lints (tests exempt via clippy.toml)
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
 redundant_clone = "warn"
 
 [workspace.lints.rust]

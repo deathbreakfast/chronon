@@ -36,8 +36,7 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
 
     for i in 0..ops {
         let job_name = format!("bench-ch5-{i}");
-        let mut job =
-            upsert_immediate_run_once_job(store.as_ref(), &job_name, NOOP_SCRIPT).await?;
+        let mut job = upsert_immediate_run_once_job(store.as_ref(), &job_name, NOOP_SCRIPT).await?;
         job.actor_json = chronon_testkit::smoke_actor_json();
         store.upsert_job(&job).await?;
 

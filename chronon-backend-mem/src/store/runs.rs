@@ -2,22 +2,28 @@
 
 use chrono::{DateTime, Duration, Utc};
 
+use chronon_core::error::ChrononError;
 use chronon_core::models::{Run, RunStatus};
 use chronon_core::Result;
 
 use super::InMemorySchedulerStore;
 
 pub(super) fn create_run(store: &InMemorySchedulerStore, run: &Run) -> Result<()> {
-    store
-        .runs
-        .write()
-        .expect("runs lock")
-        .insert(run.run_id.clone(), run.clone());
+    store.runs.write().insert(run.run_id.clone(), run.clone());
+    Ok(())
+}
+
+pub(super) fn update_run(store: &InMemorySchedulerStore, run: &Run) -> Result<()> {
+    let mut runs = store.runs.write();
+    if !runs.contains_key(&run.run_id) {
+        return Err(ChrononError::RunNotFound(run.run_id.clone()));
+    }
+    runs.insert(run.run_id.clone(), run.clone());
     Ok(())
 }
 
 pub(super) fn get_run(store: &InMemorySchedulerStore, run_id: &str) -> Result<Option<Run>> {
-    Ok(store.runs.read().expect("runs lock").get(run_id).cloned())
+    Ok(store.runs.read().get(run_id).cloned())
 }
 
 pub(super) fn list_runs_for_job(
@@ -28,7 +34,6 @@ pub(super) fn list_runs_for_job(
     let mut runs: Vec<_> = store
         .runs
         .read()
-        .expect("runs lock")
         .values()
         .filter(|r| r.job_id.as_deref() == Some(job_id))
         .cloned()
@@ -48,7 +53,6 @@ pub(super) fn list_runs_filtered(
     let mut runs: Vec<_> = store
         .runs
         .read()
-        .expect("runs lock")
         .values()
         .filter(|r| job_id.is_none_or(|id| r.job_id.as_deref() == Some(id)))
         .filter(|r| status.is_none_or(|s| r.status == s))
@@ -65,7 +69,7 @@ pub(super) fn claim_next_queued(
     now: DateTime<Utc>,
     lease_ttl_secs: i64,
 ) -> Result<Option<Run>> {
-    let mut runs = store.runs.write().expect("runs lock");
+    let mut runs = store.runs.write();
     let mut candidate: Option<(String, Run)> = None;
     for (id, run) in runs.iter() {
         if run.status != RunStatus::Queued {
@@ -108,7 +112,7 @@ pub(super) fn claim_run_by_id(
     now: DateTime<Utc>,
     lease_ttl_secs: i64,
 ) -> Result<Option<Run>> {
-    let mut runs = store.runs.write().expect("runs lock");
+    let mut runs = store.runs.write();
     let Some(run) = runs.get(run_id) else {
         return Ok(None);
     };
@@ -142,7 +146,7 @@ pub(super) fn renew_run_lease(
     now: DateTime<Utc>,
     lease_ttl_secs: i64,
 ) -> Result<bool> {
-    let mut runs = store.runs.write().expect("runs lock");
+    let mut runs = store.runs.write();
     let Some(run) = runs.get_mut(run_id) else {
         return Ok(false);
     };

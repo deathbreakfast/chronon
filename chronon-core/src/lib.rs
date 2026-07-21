@@ -43,8 +43,8 @@ pub use context::{
     ContextFactory, IdentityError, JsonScriptContextFactory, NoOpContextFactory, NoOpScriptContext,
     ScriptContext,
 };
-pub use handle::ScriptHandle;
 pub use error::{ChrononError, Result};
+pub use handle::ScriptHandle;
 pub use models::{
     Job, JobRevision, Lease, MisfirePolicy, PartitionAssignment, RetryPolicy, Run, RunStatus,
     ScheduleKind, SchedulerLeader, Script, Worker, WorkerStatus,

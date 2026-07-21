@@ -39,7 +39,7 @@ pub fn parse_schedule_kind(s: &str) -> Result<ScheduleKind> {
         "cron" => Ok(ScheduleKind::Cron),
         "run_once" => Ok(ScheduleKind::RunOnce),
         "manual" => Ok(ScheduleKind::Manual),
-        other => Err(ChrononError::StorageError(format!(
+        other => Err(ChrononError::storage(format!(
             "unknown schedule kind: {other}"
         ))),
     }
@@ -68,7 +68,7 @@ pub fn parse_run_status(s: &str) -> Result<RunStatus> {
         "failed" => Ok(RunStatus::Failed),
         "canceled" => Ok(RunStatus::Canceled),
         "timeout" => Ok(RunStatus::Timeout),
-        other => Err(ChrononError::StorageError(format!(
+        other => Err(ChrononError::storage(format!(
             "unknown run status: {other}"
         ))),
     }
@@ -89,7 +89,7 @@ pub fn parse_worker_status(s: &str) -> Result<WorkerStatus> {
         "online" => Ok(WorkerStatus::Online),
         "draining" => Ok(WorkerStatus::Draining),
         "offline" => Ok(WorkerStatus::Offline),
-        other => Err(ChrononError::StorageError(format!(
+        other => Err(ChrononError::storage(format!(
             "unknown worker status: {other}"
         ))),
     }
@@ -102,8 +102,8 @@ pub(crate) fn decode_json_opt(raw: Option<String>) -> Result<Option<Value>> {
     }
 }
 
-pub(crate) fn decode_json(raw: String) -> Result<Value> {
-    Ok(serde_json::from_str(&raw)?)
+pub(crate) fn decode_json(raw: &str) -> Result<Value> {
+    Ok(serde_json::from_str(raw)?)
 }
 
 pub(crate) fn encode_json(value: &Value) -> Result<String> {
@@ -143,7 +143,7 @@ mod tests {
     fn schedule_kind_unknown_errors() {
         assert!(matches!(
             parse_schedule_kind("invalid"),
-            Err(ChrononError::StorageError(_))
+            Err(ChrononError::StorageError { .. })
         ));
     }
 

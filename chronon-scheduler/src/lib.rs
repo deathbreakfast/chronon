@@ -48,7 +48,7 @@ pub use cron::CronExpr;
 pub use leader::{am_i_leader, current_leader, renew_leader_lease, try_acquire_leader};
 pub use partition_assigner::PartitionAssigner;
 pub use partitioning::{
-    job_execution_pool_id, job_claim_lease_ttl_secs, num_partitions_from_env,
+    job_claim_lease_ttl_secs, job_execution_pool_id, num_partitions_from_env,
     partition_hash_i64_for_job_id, run_worker_lease_renew_secs, run_worker_lease_ttl_secs,
     tick_batch_limit_from_env, tick_interval_ms_from_env, worker_concurrency_from_env,
     worker_pool_from_env, DEFAULT_POOL,

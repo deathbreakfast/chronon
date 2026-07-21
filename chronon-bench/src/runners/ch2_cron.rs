@@ -29,9 +29,7 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
     let start = Instant::now();
     let after = base.with_timezone(&chrono_tz::Tz::UTC);
     for _ in 0..ops {
-        let _ = baseline
-            .find_next_occurrence(&after, false)
-            .ok();
+        let _ = baseline.find_next_occurrence(&after, false).ok();
     }
     let baseline_elapsed = start.elapsed().as_secs_f64();
     let baseline_evals = ops as f64 / baseline_elapsed.max(1e-9);

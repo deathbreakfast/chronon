@@ -51,10 +51,12 @@ pub(crate) async fn create_run(store: &SqlSchedulerStore, run: &Run) -> Result<(
             .bind(row.claim_lease_until)
     }) {
         Ok(()) => Ok(()),
-        Err(ChrononError::StorageError(msg))
-            if msg.contains("UNIQUE") || msg.contains("unique") || msg.contains("duplicate") =>
+        Err(ChrononError::StorageError { message, .. })
+            if message.contains("UNIQUE")
+                || message.contains("unique")
+                || message.contains("duplicate") =>
         {
-            Err(ChrononError::StorageError(format!(
+            Err(ChrononError::storage(format!(
                 "duplicate run_id: {}",
                 run.run_id
             )))
@@ -99,7 +101,11 @@ pub(crate) async fn update_run(store: &SqlSchedulerStore, run: &Run) -> Result<(
             .bind(&row.claimed_by)
             .bind(row.claim_lease_until)
             .bind(&row.run_id)
-    })
+    })?;
+    if get_run(store, &run.run_id).await?.is_none() {
+        return Err(ChrononError::RunNotFound(run.run_id.clone()));
+    }
+    Ok(())
 }
 
 pub(crate) async fn get_run(store: &SqlSchedulerStore, run_id: &str) -> Result<Option<Run>> {
@@ -117,7 +123,9 @@ pub(crate) async fn list_runs_for_job(
         "SELECT * FROM chronon_run WHERE job_id = ? ORDER BY scheduled_for DESC LIMIT ?",
     );
     let limit = i64::try_from(limit).unwrap_or(i64::MAX);
-    sql_fetch_all_map!(store, &sql, |q| q.bind(job_id).bind(limit), |r| row_to_run(r))
+    sql_fetch_all_map!(store, &sql, |q| q.bind(job_id).bind(limit), |r| row_to_run(
+        r
+    ))
 }
 
 pub(crate) async fn list_runs_filtered(
@@ -136,12 +144,17 @@ pub(crate) async fn list_runs_filtered(
                 "SELECT * FROM chronon_run WHERE job_id = ? AND status = ?
                  ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
             );
-            sql_fetch_all_map!(store, &sql, |q| {
-                q.bind(job_id)
-                    .bind(run_status_to_str(status))
-                    .bind(limit)
-                    .bind(offset)
-            }, |r| row_to_run(r))
+            sql_fetch_all_map!(
+                store,
+                &sql,
+                |q| {
+                    q.bind(job_id)
+                        .bind(run_status_to_str(status))
+                        .bind(limit)
+                        .bind(offset)
+                },
+                |r| row_to_run(r)
+            )
         }
         (Some(job_id), None) => {
             let sql = bind_sql(
@@ -149,9 +162,12 @@ pub(crate) async fn list_runs_filtered(
                 "SELECT * FROM chronon_run WHERE job_id = ?
                  ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
             );
-            sql_fetch_all_map!(store, &sql, |q| q.bind(job_id).bind(limit).bind(offset), |r| {
-                row_to_run(r)
-            })
+            sql_fetch_all_map!(
+                store,
+                &sql,
+                |q| q.bind(job_id).bind(limit).bind(offset),
+                |r| { row_to_run(r) }
+            )
         }
         (None, Some(status)) => {
             let sql = bind_sql(
@@ -159,16 +175,21 @@ pub(crate) async fn list_runs_filtered(
                 "SELECT * FROM chronon_run WHERE status = ?
                  ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
             );
-            sql_fetch_all_map!(store, &sql, |q| {
-                q.bind(run_status_to_str(status)).bind(limit).bind(offset)
-            }, |r| row_to_run(r))
+            sql_fetch_all_map!(
+                store,
+                &sql,
+                |q| { q.bind(run_status_to_str(status)).bind(limit).bind(offset) },
+                |r| row_to_run(r)
+            )
         }
         (None, None) => {
             let sql = bind_sql(
                 store.dialect,
                 "SELECT * FROM chronon_run ORDER BY scheduled_for DESC LIMIT ? OFFSET ?",
             );
-            sql_fetch_all_map!(store, &sql, |q| q.bind(limit).bind(offset), |r| row_to_run(r))
+            sql_fetch_all_map!(store, &sql, |q| q.bind(limit).bind(offset), |r| row_to_run(
+                r
+            ))
         }
     }
 }
@@ -211,14 +232,19 @@ pub(crate) async fn claim_next_queued(
 ) -> Result<Option<Run>> {
     let lease_until = now + Duration::seconds(lease_ttl_secs);
     let sql = claim_next_queued_sql(store.dialect);
-    sql_fetch_optional_map!(store, &sql, |q| {
-        q.bind(worker_id)
-            .bind(lease_until)
-            .bind(now)
-            .bind(now)
-            .bind(pool_id)
-            .bind(pool_id)
-    }, |r| row_to_run(&r))
+    sql_fetch_optional_map!(
+        store,
+        &sql,
+        |q| {
+            q.bind(worker_id)
+                .bind(lease_until)
+                .bind(now)
+                .bind(now)
+                .bind(pool_id)
+                .bind(pool_id)
+        },
+        |r| row_to_run(&r)
+    )
 }
 
 fn claim_run_by_id_sql(dialect: SqlDialect) -> String {
@@ -250,15 +276,20 @@ pub(crate) async fn claim_run_by_id(
 ) -> Result<Option<Run>> {
     let lease_until = now + Duration::seconds(lease_ttl_secs);
     let sql = claim_run_by_id_sql(store.dialect);
-    sql_fetch_optional_map!(store, &sql, |q| {
-        q.bind(worker_id)
-            .bind(lease_until)
-            .bind(run_id)
-            .bind(now)
-            .bind(now)
-            .bind(pool_id)
-            .bind(pool_id)
-    }, |r| row_to_run(&r))
+    sql_fetch_optional_map!(
+        store,
+        &sql,
+        |q| {
+            q.bind(worker_id)
+                .bind(lease_until)
+                .bind(run_id)
+                .bind(now)
+                .bind(now)
+                .bind(pool_id)
+                .bind(pool_id)
+        },
+        |r| row_to_run(&r)
+    )
 }
 
 fn claim_runs_by_ids_postgres_sql() -> &'static str {
@@ -313,7 +344,7 @@ pub(crate) async fn claim_runs_by_ids(
                 .bind(pool_id)
                 .fetch_all(pool)
                 .await
-                .map_err(|e| map_err(&e))?;
+                .map_err(map_err)?;
             rows.iter().map(row_to_run).collect()
         }
         crate::SqlPool::Sqlite(_) => {
@@ -346,26 +377,22 @@ pub(crate) async fn renew_run_lease(
            AND status IN ('claimed', 'running')",
     );
     let rows = match &store.pool {
-        crate::SqlPool::Sqlite(pool) => {
-            sqlx::query(&sql)
-                .bind(lease_until)
-                .bind(run_id)
-                .bind(worker_id)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
-        crate::SqlPool::Postgres(pool) => {
-            sqlx::query(&sql)
-                .bind(lease_until)
-                .bind(run_id)
-                .bind(worker_id)
-                .execute(pool)
-                .await
-                .map_err(|e| map_err(&e))?
-                .rows_affected()
-        }
+        crate::SqlPool::Sqlite(pool) => sqlx::query(&sql)
+            .bind(lease_until)
+            .bind(run_id)
+            .bind(worker_id)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
+        crate::SqlPool::Postgres(pool) => sqlx::query(&sql)
+            .bind(lease_until)
+            .bind(run_id)
+            .bind(worker_id)
+            .execute(pool)
+            .await
+            .map_err(map_err)?
+            .rows_affected(),
     };
     Ok(rows > 0)
 }

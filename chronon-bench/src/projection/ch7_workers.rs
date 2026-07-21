@@ -36,7 +36,10 @@ pub fn ch7_worker_curve(
 ) -> Result<()> {
     let reports = load_reports(reports_dir, "bm-ch7", storage, hardware)?;
     if reports.is_empty() {
-        bail!("no bm-ch7 reports for storage={storage} hardware={hardware} in {}", reports_dir.display());
+        bail!(
+            "no bm-ch7 reports for storage={storage} hardware={hardware} in {}",
+            reports_dir.display()
+        );
     }
 
     let mut points = Vec::new();
@@ -48,10 +51,7 @@ pub fn ch7_worker_curve(
         else {
             continue;
         };
-        let rate = report
-            .claim_ops_per_sec
-            .as_ref()
-            .map_or(0.0, |s| s.max);
+        let rate = report.claim_ops_per_sec.as_ref().map_or(0.0, |s| s.max);
         if rate <= 0.0 {
             continue;
         }
@@ -104,7 +104,9 @@ pub fn ch7_worker_curve(
     };
 
     let out_path = out.unwrap_or_else(|| {
-        reports_dir.join(format!("scaling-curve-ch7-workers-{storage}-{hardware}.json"))
+        reports_dir.join(format!(
+            "scaling-curve-ch7-workers-{storage}-{hardware}.json"
+        ))
     });
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)?;

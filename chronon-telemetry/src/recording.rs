@@ -1,7 +1,9 @@
 //! In-memory [`TelemetrySink`] for tests.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use crate::TelemetrySink;
 
@@ -59,7 +61,7 @@ impl RecordingSink {
 
     /// Discard all captured counters, gauges, and events.
     pub fn clear(&self) {
-        let mut inner = self.inner.lock().expect("recording sink lock");
+        let mut inner = self.inner.lock();
         inner.counters.clear();
         inner.gauges.clear();
         inner.events.clear();
@@ -67,29 +69,17 @@ impl RecordingSink {
 
     /// Clone of all recorded counter increments (append order).
     pub fn counters(&self) -> Vec<RecordedCounter> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .counters
-            .clone()
+        self.inner.lock().counters.clone()
     }
 
     /// Clone of all recorded gauge samples (append order).
     pub fn gauges(&self) -> Vec<RecordedGauge> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .gauges
-            .clone()
+        self.inner.lock().gauges.clone()
     }
 
     /// Clone of all recorded events (append order).
     pub fn events(&self) -> Vec<RecordedEvent> {
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .events
-            .clone()
+        self.inner.lock().events.clone()
     }
 
     /// Filter counters by metric name and required label subset.
@@ -127,15 +117,11 @@ impl TelemetrySink for RecordingSink {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .counters
-            .push(RecordedCounter {
-                name: name.to_string(),
-                labels,
-                delta,
-            });
+        self.inner.lock().counters.push(RecordedCounter {
+            name: name.to_string(),
+            labels,
+            delta,
+        });
     }
 
     fn record_gauge(&self, name: &str, labels: &[(&str, &str)], value: f64) {
@@ -143,15 +129,11 @@ impl TelemetrySink for RecordingSink {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .gauges
-            .push(RecordedGauge {
-                name: name.to_string(),
-                labels,
-                value,
-            });
+        self.inner.lock().gauges.push(RecordedGauge {
+            name: name.to_string(),
+            labels,
+            value,
+        });
     }
 
     fn log_event(&self, schema: &str, fields: &[(&str, &str)]) {
@@ -159,14 +141,10 @@ impl TelemetrySink for RecordingSink {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.inner
-            .lock()
-            .expect("recording sink lock")
-            .events
-            .push(RecordedEvent {
-                schema: schema.to_string(),
-                fields,
-            });
+        self.inner.lock().events.push(RecordedEvent {
+            schema: schema.to_string(),
+            fields,
+        });
     }
 }
 

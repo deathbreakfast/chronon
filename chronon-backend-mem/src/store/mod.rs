@@ -7,13 +7,13 @@ mod runs;
 mod trait_impl;
 
 use std::collections::HashMap;
-use std::sync::RwLock;
 
 use chrono::{DateTime, Utc};
 use chronon_core::error::{ChrononError, Result};
 use chronon_core::models::{
     Job, JobRevision, PartitionAssignment, Run, SchedulerLeader, Script, Worker,
 };
+use parking_lot::RwLock;
 
 /// Fixed primary key for the singleton leader election row.
 pub const LEADER_ROW_ID: &str = "singleton";
@@ -27,6 +27,12 @@ pub const LEADER_ROW_ID: &str = "singleton";
 /// Enable the facade `mem` feature to re-export this type from `chronon`. Wire with
 /// `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new()))` or
 /// [`crate::install_default_mem_store`].
+///
+/// # Locking
+///
+/// Maps are guarded by [`parking_lot::RwLock`] for short, synchronous critical sections.
+/// **Never hold a lock across `.await`** — take the lock, clone or mutate, drop the guard,
+/// then await. This keeps Tokio worker threads unblocked under contention.
 ///
 /// # Examples
 ///
@@ -84,8 +90,8 @@ impl InMemorySchedulerStore {
 
     /// Insert or replace a job and update the name index.
     pub(super) fn write_job(&self, job: Job) -> Result<()> {
-        let mut jobs = self.jobs.write().expect("jobs lock");
-        let mut by_name = self.jobs_by_name.write().expect("jobs_by_name lock");
+        let mut jobs = self.jobs.write();
+        let mut by_name = self.jobs_by_name.write();
         by_name.insert(job.job_name.clone(), job.job_id.clone());
         jobs.insert(job.job_id.clone(), job);
         Ok(())
@@ -96,7 +102,7 @@ impl InMemorySchedulerStore {
     where
         F: FnOnce(&mut Job),
     {
-        let mut jobs = self.jobs.write().expect("jobs lock");
+        let mut jobs = self.jobs.write();
         let job = jobs
             .get_mut(job_id)
             .ok_or_else(|| ChrononError::JobNotFound(job_id.to_string()))?;
@@ -106,16 +112,11 @@ impl InMemorySchedulerStore {
     }
 
     /// Mutate an existing job and stamp `updated_at` to `now`.
-    pub(super) fn mutate_job_at<F>(
-        &self,
-        job_id: &str,
-        now: DateTime<Utc>,
-        f: F,
-    ) -> Result<()>
+    pub(super) fn mutate_job_at<F>(&self, job_id: &str, now: DateTime<Utc>, f: F) -> Result<()>
     where
         F: FnOnce(&mut Job),
     {
-        let mut jobs = self.jobs.write().expect("jobs lock");
+        let mut jobs = self.jobs.write();
         let job = jobs
             .get_mut(job_id)
             .ok_or_else(|| ChrononError::JobNotFound(job_id.to_string()))?;

@@ -13,6 +13,7 @@ use chronon_scheduler::{
 use chronon_telemetry::TelemetrySink;
 use tokio::sync::Notify;
 use tokio::time::{sleep, timeout};
+use tracing::Instrument;
 
 use crate::env::env_flag;
 use crate::retry::finalize_failed_run;
@@ -65,79 +66,95 @@ async fn worker_slot(
             continue;
         };
 
-        run.start();
-        run.status = RunStatus::Running;
-        if store.update_run(&run).await.is_err() {
-            continue;
-        }
+        let run_span = tracing::info_span!(
+            "worker_run",
+            run_id = %run.run_id,
+            worker_id = %worker_id,
+            pool = %pool,
+            job_name = %job.job_name,
+            script_name = %run.script_name,
+        );
 
-        let run_id = run.run_id.clone();
-        let renew_store = Arc::clone(&store);
-        let wid = worker_id.clone();
-        let renew_every = Duration::from_secs(run_worker_lease_renew_secs());
-        let renew_handle = tokio::spawn(async move {
-            loop {
-                sleep(renew_every).await;
-                let ok = renew_store
-                    .renew_run_lease(&run_id, &wid, Utc::now(), run_worker_lease_ttl_secs())
+        async {
+            tracing::info!("claimed run");
+
+            run.start();
+            run.status = RunStatus::Running;
+            if store.update_run(&run).await.is_err() {
+                return;
+            }
+
+            let run_id = run.run_id.clone();
+            let renew_store = Arc::clone(&store);
+            let wid = worker_id.clone();
+            let renew_every = Duration::from_secs(run_worker_lease_renew_secs());
+            let renew_handle = tokio::spawn(async move {
+                loop {
+                    sleep(renew_every).await;
+                    let ok = renew_store
+                        .renew_run_lease(&run_id, &wid, Utc::now(), run_worker_lease_ttl_secs())
+                        .await
+                        .unwrap_or(false);
+                    if !ok {
+                        break;
+                    }
+                }
+            });
+
+            let started = Utc::now();
+            let exec_fut = execute_script(ExecuteScriptRequest {
+                registry: &executor.registry,
+                context_factory: &executor.context_factory,
+                telemetry: &executor.telemetry,
+                script_name: &run.script_name,
+                actor_json: &job.actor_json,
+                params_json: run.params_json.clone(),
+                job_name: &job.job_name,
+                run_id: &run.run_id,
+            });
+
+            let res = match job.timeout_ms {
+                Some(ms) if ms > 0 => {
+                    match timeout(Duration::from_millis(ms as u64), exec_fut).await {
+                        Ok(inner) => inner.map_err(|e| (RunStatus::Failed, e.to_string())),
+                        Err(_) => {
+                            Err((RunStatus::Timeout, format!("run exceeded timeout_ms={ms}")))
+                        }
+                    }
+                }
+                _ => exec_fut
                     .await
-                    .unwrap_or(false);
-                if !ok {
-                    break;
+                    .map_err(|e| (RunStatus::Failed, e.to_string())),
+            };
+            renew_handle.abort();
+
+            let duration_ms = (Utc::now() - started).num_milliseconds();
+            match res {
+                Ok(()) => {
+                    run.complete();
+                    run.duration_ms = Some(duration_ms);
+                    telemetry.record_counter(
+                        "chronon_runs_completed",
+                        &[("job", job.job_name.as_str())],
+                        1,
+                    );
+                    tracing::info!(duration_ms, "worker run completed");
+                    let _ = store.update_run(&run).await;
                 }
-            }
-        });
-
-        let started = Utc::now();
-        let exec_fut = execute_script(ExecuteScriptRequest {
-            registry: &executor.registry,
-            context_factory: &executor.context_factory,
-            telemetry: &executor.telemetry,
-            script_name: &run.script_name,
-            actor_json: &job.actor_json,
-            params_json: run.params_json.clone(),
-            job_name: &job.job_name,
-            run_id: &run.run_id,
-        });
-
-        let res = match job.timeout_ms {
-            Some(ms) if ms > 0 => {
-                match timeout(Duration::from_millis(ms as u64), exec_fut).await {
-                    Ok(inner) => inner.map_err(|e| (RunStatus::Failed, e.to_string())),
-                    Err(_) => Err((
-                        RunStatus::Timeout,
-                        format!("run exceeded timeout_ms={ms}"),
-                    )),
+                Err((status, err)) => {
+                    telemetry.record_counter(
+                        "chronon_runs_failed",
+                        &[("job", job.job_name.as_str())],
+                        1,
+                    );
+                    tracing::warn!(duration_ms, error = %err, ?status, "worker run failed");
+                    run.duration_ms = Some(duration_ms);
+                    finalize_failed_run(&store, run, &job, status, err).await;
                 }
-            }
-            _ => exec_fut
-                .await
-                .map_err(|e| (RunStatus::Failed, e.to_string())),
-        };
-        renew_handle.abort();
-
-        let duration_ms = (Utc::now() - started).num_milliseconds();
-        match res {
-            Ok(()) => {
-                run.complete();
-                run.duration_ms = Some(duration_ms);
-                telemetry.record_counter(
-                    "chronon_runs_completed",
-                    &[("job", job.job_name.as_str())],
-                    1,
-                );
-                let _ = store.update_run(&run).await;
-            }
-            Err((status, err)) => {
-                telemetry.record_counter(
-                    "chronon_runs_failed",
-                    &[("job", job.job_name.as_str())],
-                    1,
-                );
-                run.duration_ms = Some(duration_ms);
-                finalize_failed_run(&store, run, &job, status, err).await;
             }
         }
+        .instrument(run_span)
+        .await;
     }
 }
 
@@ -188,7 +205,7 @@ pub async fn run_worker_loop(
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         tokio::select! {
-            _ = shutdown.notified() => break,
+            () = shutdown.notified() => break,
             _ = interval.tick() => {
                 heartbeat_worker(&store, &worker_id, &pool_id).await;
             }

@@ -1,6 +1,6 @@
+use chronon_core::default_store_from_global;
 use chronon_core::models::Job;
 use chronon_core::store::SchedulerStore;
-use chronon_core::default_store_from_global;
 
 use crate::install_default_mem_store;
 

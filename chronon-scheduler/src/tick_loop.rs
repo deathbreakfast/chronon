@@ -18,10 +18,7 @@ use crate::partitioning::{self, job_execution_pool_id};
 
 async fn count_active_runs(store: &Arc<dyn SchedulerStore>, job_id: &str) -> Result<i32> {
     let runs = store.list_runs_for_job(job_id, 10_000).await?;
-    Ok(runs
-        .iter()
-        .filter(|r| r.status.is_active())
-        .count() as i32)
+    Ok(runs.iter().filter(|r| r.status.is_active()).count() as i32)
 }
 
 fn cron_next_run_at(job: &Job, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
@@ -66,10 +63,7 @@ async fn skip_due_job(
     } else {
         None
     };
-    if let Err(e) = store
-        .persist_post_tick_job_state(job_id, next_run_at)
-        .await
-    {
+    if let Err(e) = store.persist_post_tick_job_state(job_id, next_run_at).await {
         telemetry.log_event(
             "chronon_scheduler_error",
             &[("component", "tick_loop"), ("message", &e.to_string())],
@@ -173,10 +167,7 @@ async fn enqueue_due_job(
         None
     };
 
-    if let Err(e) = store
-        .persist_post_tick_job_state(job_id, next_run_at)
-        .await
-    {
+    if let Err(e) = store.persist_post_tick_job_state(job_id, next_run_at).await {
         telemetry.log_event(
             "chronon_scheduler_error",
             &[("component", "tick_loop"), ("message", &e.to_string())],
@@ -240,6 +231,10 @@ pub struct TickResult {
 ///
 /// Honors `CHRONON_DISABLE_COORDINATOR` and drains quickly when the due batch is large.
 /// Updates `draining` to request shorter sleeps on subsequent ticks when backlogged.
+#[tracing::instrument(
+    skip(store, telemetry, assigner, draining),
+    fields(instance_id = %instance_id)
+)]
 pub async fn run_one_tick(
     store: &Arc<dyn SchedulerStore>,
     telemetry: &Arc<dyn TelemetrySink>,
@@ -258,11 +253,8 @@ pub async fn run_one_tick(
     let tick_ms = partitioning::tick_interval_ms_from_env();
     let batch_limit = partitioning::tick_batch_limit_from_env();
 
-    telemetry.record_counter(
-        "chronon_scheduler_ticks",
-        &[("component", "scheduler")],
-        1,
-    );
+    telemetry.record_counter("chronon_scheduler_ticks", &[("component", "scheduler")], 1);
+    tracing::debug!(tick_ms, batch_limit, "scheduler tick started");
 
     let owned = assigner.owned_partitions().await;
     if owned.is_empty() {
@@ -321,8 +313,7 @@ pub async fn run_one_tick(
         .await
         .ok()
         .flatten();
-    let soon = min_next
-        .is_some_and(|t| t <= now + chrono::Duration::milliseconds(250));
+    let soon = min_next.is_some_and(|t| t <= now + chrono::Duration::milliseconds(250));
     *draining = u32::try_from(ids.len()).unwrap_or(u32::MAX) >= batch_limit / 2 || soon;
 
     let due_count = ids.len();
@@ -342,6 +333,12 @@ pub async fn run_one_tick(
         sleep(Duration::from_millis(tick_ms)).await;
     }
 
+    tracing::debug!(
+        enqueued,
+        due_count,
+        draining = *draining,
+        "scheduler tick finished"
+    );
     TickResult {
         enqueued,
         due_count,

@@ -2,6 +2,7 @@
 //!
 //! Kept here so backend crates do not depend on `chronon-testkit` (publish = false).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -36,9 +37,8 @@ async fn sqlite_file_store_contract() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("chronon.db");
     let url = format!("sqlite://{}?mode=rwc", path.display());
-    let store: Arc<dyn SchedulerStore> = Arc::new(
-        SqliteSchedulerStore::connect(&url).await.expect("connect"),
-    );
+    let store: Arc<dyn SchedulerStore> =
+        Arc::new(SqliteSchedulerStore::connect(&url).await.expect("connect"));
     run_store_contract(store)
         .await
         .expect("sqlite file contract");

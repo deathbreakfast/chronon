@@ -32,7 +32,7 @@ impl syn::parse::Parse for ScriptAttrs {
             }
             input.parse::<Token![,]>()?;
         }
-        Ok(ScriptAttrs {
+        Ok(Self {
             name: name.ok_or_else(|| {
                 syn::Error::new(
                     proc_macro2::Span::call_site(),

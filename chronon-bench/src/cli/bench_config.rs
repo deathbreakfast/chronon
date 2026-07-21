@@ -35,7 +35,10 @@ pub struct BenchConfigOverrides {
 ///
 /// Precedence (lowest → highest): experiment defaults, harness env, CLI flags.
 #[must_use]
-pub fn resolve_bench_config(experiment_id: &str, overrides: BenchConfigOverrides) -> BenchRunConfig {
+pub fn resolve_bench_config(
+    experiment_id: &str,
+    overrides: BenchConfigOverrides,
+) -> BenchRunConfig {
     let mut cfg = BenchRunConfig::for_experiment(experiment_id);
     apply_env_overrides(&mut cfg);
     apply_overrides(&mut cfg, overrides);

@@ -36,11 +36,18 @@ impl FromRef<AppState> for ChrononState {
 
 #[tokio::main]
 async fn main() -> chronon::Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .try_init();
+
     let store = Arc::new(InMemorySchedulerStore::new());
     let coordinator = Arc::new(CoordinatorService::new(store));
     let registry = Arc::new({
         let mut r = ScriptRegistry::new();
-        r.register(ScriptDescriptor::new("http_demo", noop_script));
+        r.register(&ScriptDescriptor::new("http_demo", noop_script));
         r
     });
 
@@ -70,6 +77,6 @@ async fn main() -> chronon::Result<()> {
     assert!(parsed.success);
     assert_eq!(parsed.data.as_ref().map(|d| d.len()), Some(1));
 
-    println!("Chronon API mounted at {API_PREFIX} — listed 1 script");
+    eprintln!("Chronon API mounted at {API_PREFIX} — listed 1 script");
     Ok(())
 }

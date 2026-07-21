@@ -1,5 +1,6 @@
 //! Scheduler leader election integration (store + leader module).
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::sync::Arc;
 
 use chronon_backend_mem::InMemorySchedulerStore;

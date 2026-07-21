@@ -48,7 +48,7 @@ struct StoredScript {
 /// }
 ///
 /// let mut registry = ScriptRegistry::new();
-/// registry.register(ScriptDescriptor::new("daemon-noop", noop));
+/// registry.register(&ScriptDescriptor::new("daemon-noop", noop));
 /// assert!(registry.contains("daemon-noop"));
 /// assert_eq!(registry.len(), 1);
 /// ```
@@ -91,7 +91,7 @@ impl ScriptRegistry {
     /// Register every script descriptor collected via link-time inventory.
     pub fn register_from_inventory(&mut self) {
         for desc in quark::inventory::iter::<ScriptDescriptor> {
-            self.register(ScriptDescriptor::with_signature(
+            self.register(&ScriptDescriptor::with_signature(
                 desc.name,
                 desc.invoke,
                 desc.signature_json,
@@ -103,7 +103,7 @@ impl ScriptRegistry {
     /// Inserts or replaces a script descriptor keyed by [`ScriptDescriptor::name`].
     ///
     /// Duplicate names overwrite the previous handler without error.
-    pub fn register(&mut self, desc: ScriptDescriptor) {
+    pub fn register(&mut self, desc: &ScriptDescriptor) {
         self.scripts.insert(
             desc.name.to_string(),
             StoredScript {
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn register_and_lookup() {
         let mut reg = ScriptRegistry::new();
-        reg.register(ScriptDescriptor::new("hello", stub_invoke));
+        reg.register(&ScriptDescriptor::new("hello", stub_invoke));
         assert!(reg.contains("hello"));
         assert_eq!(reg.len(), 1);
     }

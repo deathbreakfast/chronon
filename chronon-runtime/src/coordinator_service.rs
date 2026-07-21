@@ -6,7 +6,7 @@ use chrono::Utc;
 use chronon_core::models::{Job, JobRevision, Run, RunStatus, ScheduleKind};
 use chronon_core::store::SchedulerStore;
 use chronon_core::{ChrononError, Result};
-use chronon_scheduler::{partition_hash_i64_for_job_id, CronExpr, job_execution_pool_id};
+use chronon_scheduler::{job_execution_pool_id, partition_hash_i64_for_job_id, CronExpr};
 use serde_json::Value;
 
 /// Job and run CRUD backed by [`SchedulerStore`] — no background loops.
@@ -102,6 +102,13 @@ impl CoordinatorService {
         job.updated_at = Utc::now();
 
         if let Some(existing) = self.store.get_job(&job.job_id).await? {
+            if existing.script_name != job.script_name {
+                return Err(ChrononError::ScriptMismatch {
+                    expected: existing.script_name,
+                    actual: job.script_name,
+                    job_name: job.job_name,
+                });
+            }
             if existing.current_revision != job.current_revision {
                 let revision = JobRevision::new(
                     &job.job_id,
@@ -131,11 +138,7 @@ impl CoordinatorService {
 
     /// Load a job by human-readable `job_name`.
     pub async fn get_job_by_name(&self, job_name: &str) -> Option<Job> {
-        self.store
-            .get_job_by_name(job_name)
-            .await
-            .ok()
-            .flatten()
+        self.store.get_job_by_name(job_name).await.ok().flatten()
     }
 
     /// All jobs in the store.

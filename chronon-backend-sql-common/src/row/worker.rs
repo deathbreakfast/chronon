@@ -60,16 +60,16 @@ where
     DateTime<Utc>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
     Option<String>: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
 {
-    let status: String = row.try_get("status").map_err(|e| map_err(&e))?;
+    let status: String = row.try_get("status").map_err(map_err)?;
     WorkerRow {
-        worker_id: row.try_get("worker_id").map_err(|e| map_err(&e))?,
-        pool_id: row.try_get("pool_id").map_err(|e| map_err(&e))?,
-        cell_id: row.try_get("cell_id").map_err(|e| map_err(&e))?,
+        worker_id: row.try_get("worker_id").map_err(map_err)?,
+        pool_id: row.try_get("pool_id").map_err(map_err)?,
+        cell_id: row.try_get("cell_id").map_err(map_err)?,
         status,
-        last_heartbeat_at: row.try_get("last_heartbeat_at").map_err(|e| map_err(&e))?,
-        capacity_json: row.try_get("capacity_json").map_err(|e| map_err(&e))?,
-        created_at: row.try_get("created_at").map_err(|e| map_err(&e))?,
-        updated_at: row.try_get("updated_at").map_err(|e| map_err(&e))?,
+        last_heartbeat_at: row.try_get("last_heartbeat_at").map_err(map_err)?,
+        capacity_json: row.try_get("capacity_json").map_err(map_err)?,
+        created_at: row.try_get("created_at").map_err(map_err)?,
+        updated_at: row.try_get("updated_at").map_err(map_err)?,
     }
     .to_model()
 }

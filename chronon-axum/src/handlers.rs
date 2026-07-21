@@ -6,16 +6,17 @@ use axum::{
     Json,
 };
 
-use chronon_core::{Job, ScheduleKind};
+use chronon_core::{ChrononError, Job, ScheduleKind};
 
 use crate::dto::{
     JobActionRequest, JobResponse, ListJobsQuery, ListRunsQuery, RunResponse, UpsertJobRequest,
 };
-use crate::handlers_common::ApiResponse;
+use crate::handlers_common::{chronon_err, ApiResponse};
 use crate::state::ChrononState;
 use chronon_scheduler::CronExpr;
 
 /// `POST /jobs/upsert` — create or update a job; 400 if script missing or cron invalid.
+#[tracing::instrument(skip(state, req), fields(job_name = %req.job_name, script_name = %req.script_name))]
 pub async fn upsert_job(
     State(state): State<ChrononState>,
     Json(req): Json<UpsertJobRequest>,
@@ -70,10 +71,7 @@ pub async fn upsert_job(
 
     match state.coordinator.upsert_job(job.clone()).await {
         Ok(()) => (StatusCode::OK, Json(ApiResponse::ok(job.into()))),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::err(e.to_string())),
-        ),
+        Err(e) => chronon_err(&e),
     }
 }
 
@@ -84,19 +82,11 @@ pub async fn list_jobs(
 ) -> (StatusCode, Json<ApiResponse<Vec<JobResponse>>>) {
     let jobs = match state.coordinator.list_jobs().await {
         Ok(jobs) => jobs,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::err(e.to_string())),
-            );
-        }
+        Err(e) => return chronon_err(&e),
     };
 
     if let Some(ref kind) = query.schedule_kind {
-        let ok = matches!(
-            kind.as_str(),
-            "cron" | "run_once" | "manual"
-        );
+        let ok = matches!(kind.as_str(), "cron" | "run_once" | "manual");
         if !ok {
             return (
                 StatusCode::BAD_REQUEST,
@@ -110,22 +100,20 @@ pub async fn list_jobs(
     let mut filtered: Vec<Job> = jobs
         .into_iter()
         .filter(|j| {
-            query
-                .job_name
-                .as_ref()
-                .is_none_or(|n| j.job_name == *n)
+            query.job_name.as_ref().is_none_or(|n| j.job_name == *n)
                 && query
                     .script_name
                     .as_ref()
                     .is_none_or(|n| j.script_name == *n)
                 && query.enabled.is_none_or(|e| j.enabled == e)
-                && query.schedule_kind.as_ref().is_none_or(|k| {
-                    match j.schedule_kind {
+                && query
+                    .schedule_kind
+                    .as_ref()
+                    .is_none_or(|k| match j.schedule_kind {
                         ScheduleKind::Cron => k == "cron",
                         ScheduleKind::RunOnce => k == "run_once",
                         ScheduleKind::Manual => k == "manual",
-                    }
-                })
+                    })
         })
         .collect();
 
@@ -149,10 +137,7 @@ pub async fn get_job(
 ) -> (StatusCode, Json<ApiResponse<JobResponse>>) {
     match state.coordinator.get_job(&job_id).await {
         Some(job) => (StatusCode::OK, Json(ApiResponse::ok(job.into()))),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(ApiResponse::err(format!("Job '{job_id}' not found"))),
-        ),
+        None => chronon_err(&ChrononError::JobNotFound(job_id)),
     }
 }
 
@@ -163,10 +148,7 @@ pub async fn pause_job(
 ) -> (StatusCode, Json<ApiResponse<()>>) {
     match state.coordinator.pause_job(&req.job_id).await {
         Ok(()) => (StatusCode::OK, Json(ApiResponse::ok(()))),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::err(e.to_string())),
-        ),
+        Err(e) => chronon_err(&e),
     }
 }
 
@@ -177,14 +159,12 @@ pub async fn resume_job(
 ) -> (StatusCode, Json<ApiResponse<()>>) {
     match state.coordinator.resume_job(&req.job_id).await {
         Ok(()) => (StatusCode::OK, Json(ApiResponse::ok(()))),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::err(e.to_string())),
-        ),
+        Err(e) => chronon_err(&e),
     }
 }
 
 /// `POST /jobs/run_now` — enqueue an immediate run; returns new `run_id` in `data`.
+#[tracing::instrument(skip(state, req), fields(job_id = %req.job_id))]
 pub async fn run_now(
     State(state): State<ChrononState>,
     Json(req): Json<JobActionRequest>,
@@ -195,10 +175,7 @@ pub async fn run_now(
         .await
     {
         Ok(run_id) => (StatusCode::OK, Json(ApiResponse::ok(run_id))),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::err(e.to_string())),
-        ),
+        Err(e) => chronon_err(&e),
     }
 }
 
@@ -206,7 +183,7 @@ pub async fn run_now(
 pub async fn get_job_revisions(
     State(state): State<ChrononState>,
     Path(job_id): Path<String>,
-) -> Json<ApiResponse<Vec<serde_json::Value>>> {
+) -> (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>) {
     match state.coordinator.list_revisions(&job_id).await {
         Ok(revisions) => {
             let json_revisions: Vec<serde_json::Value> = revisions
@@ -221,9 +198,9 @@ pub async fn get_job_revisions(
                     })
                 })
                 .collect();
-            Json(ApiResponse::ok(json_revisions))
+            (StatusCode::OK, Json(ApiResponse::ok(json_revisions)))
         }
-        Err(e) => Json(ApiResponse::err(e.to_string())),
+        Err(e) => chronon_err(&e),
     }
 }
 
@@ -231,19 +208,24 @@ pub async fn get_job_revisions(
 pub async fn list_runs(
     State(state): State<ChrononState>,
     Query(query): Query<ListRunsQuery>,
-) -> Json<ApiResponse<Vec<RunResponse>>> {
+) -> (StatusCode, Json<ApiResponse<Vec<RunResponse>>>) {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(100);
     match state
         .coordinator
-        .list_runs(query.job_id.as_deref(), query.status.as_deref(), offset, limit)
+        .list_runs(
+            query.job_id.as_deref(),
+            query.status.as_deref(),
+            offset,
+            limit,
+        )
         .await
     {
         Ok(runs) => {
             let responses: Vec<RunResponse> = runs.into_iter().map(Into::into).collect();
-            Json(ApiResponse::ok(responses))
+            (StatusCode::OK, Json(ApiResponse::ok(responses)))
         }
-        Err(e) => Json(ApiResponse::err(e.to_string())),
+        Err(e) => chronon_err(&e),
     }
 }
 
@@ -254,14 +236,8 @@ pub async fn get_run(
 ) -> (StatusCode, Json<ApiResponse<RunResponse>>) {
     match state.coordinator.get_run(&run_id).await {
         Ok(Some(run)) => (StatusCode::OK, Json(ApiResponse::ok(run.into()))),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(ApiResponse::err(format!("Run '{run_id}' not found"))),
-        ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::err(e.to_string())),
-        ),
+        Ok(None) => chronon_err(&ChrononError::RunNotFound(run_id)),
+        Err(e) => chronon_err(&e),
     }
 }
 

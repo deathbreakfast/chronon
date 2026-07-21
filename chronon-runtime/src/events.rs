@@ -19,7 +19,10 @@ pub async fn handle_executor_event(store: &Arc<dyn SchedulerStore>, event: Execu
                 let _ = store.update_run(&run).await;
             }
         }
-        ExecutorEvent::RunCompleted { run_id, duration_ms } => {
+        ExecutorEvent::RunCompleted {
+            run_id,
+            duration_ms,
+        } => {
             if let Ok(Some(mut run)) = store.get_run(&run_id).await {
                 run.complete();
                 run.duration_ms = Some(duration_ms);

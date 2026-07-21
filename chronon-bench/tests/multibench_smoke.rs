@@ -1,9 +1,10 @@
 //! Multibench BM-CH7 smoke — two simulated clients on mem storage.
 
-use std::sync::Mutex;
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use chronon_bench::cli::bench_config::{resolve_bench_config, BenchConfigOverrides};
 use chronon_bench::experiments::resolve_experiment;
@@ -58,12 +59,8 @@ async fn multibench_two_clients_mem_smoke() {
         .await
         .expect("prefill");
 
-    let plan = resolve_experiment(
-        "bm-ch7",
-        Some(workers as usize),
-        Some(prefill as usize),
-    )
-    .expect("plan");
+    let plan =
+        resolve_experiment("bm-ch7", Some(workers as usize), Some(prefill as usize)).expect("plan");
 
     let dims0 = cfg0.sweep_dimensions();
     let dims1 = cfg1.sweep_dimensions();
@@ -113,12 +110,14 @@ async fn multibench_two_clients_mem_smoke() {
     let aggregate_path = reports.join("bm-ch7-bc2-aggregate-bc2-mem-local.json");
     assert!(aggregate_path.exists(), "aggregate report missing");
     let agg: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(aggregate_path).expect("read")).expect("json");
-    assert!(agg
-        .get("fleet_claim_ops_per_sec")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.0)
-        > 0.0);
+        serde_json::from_str(&std::fs::read_to_string(aggregate_path).expect("read"))
+            .expect("json");
+    assert!(
+        agg.get("fleet_claim_ops_per_sec")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+            > 0.0
+    );
 
     std::env::remove_var("CHRONON_BENCH_HARDWARE");
     std::env::remove_var("CHRONON_CH7_DRAIN_IDLE_SECS");

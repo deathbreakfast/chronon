@@ -19,5 +19,5 @@ fn script_impl_impl(attr: TokenStream2, item: TokenStream2) -> syn::Result<Token
     let attrs: ScriptAttrs = syn::parse2(attr)?;
     let input: ItemFn = syn::parse2(item)?;
     validate_signature(&input.sig)?;
-    expand_script(attrs, input)
+    expand_script(&attrs, &input)
 }

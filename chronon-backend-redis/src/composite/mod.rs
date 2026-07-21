@@ -75,10 +75,7 @@ impl PostgresRedisSchedulerStore {
 
 #[async_trait]
 impl SchedulerStore for PostgresRedisSchedulerStore {
-    async fn upsert_job(
-        &self,
-        job: &chronon_core::models::Job,
-    ) -> Result<()> {
+    async fn upsert_job(&self, job: &chronon_core::models::Job) -> Result<()> {
         self.sql.upsert_job(job).await
     }
 
@@ -86,10 +83,7 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
         self.sql.get_job(job_id).await
     }
 
-    async fn get_job_by_name(
-        &self,
-        job_name: &str,
-    ) -> Result<Option<chronon_core::models::Job>> {
+    async fn get_job_by_name(&self, job_name: &str) -> Result<Option<chronon_core::models::Job>> {
         self.sql.get_job_by_name(job_name).await
     }
 
@@ -97,10 +91,7 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
         self.sql.list_jobs().await
     }
 
-    async fn list_due_jobs(
-        &self,
-        before: DateTime<Utc>,
-    ) -> Result<Vec<chronon_core::models::Job>> {
+    async fn list_due_jobs(&self, before: DateTime<Utc>) -> Result<Vec<chronon_core::models::Job>> {
         self.sql.list_due_jobs(before).await
     }
 
@@ -203,17 +194,11 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
             .await
     }
 
-    async fn append_revision(
-        &self,
-        revision: &chronon_core::models::JobRevision,
-    ) -> Result<()> {
+    async fn append_revision(&self, revision: &chronon_core::models::JobRevision) -> Result<()> {
         self.sql.append_revision(revision).await
     }
 
-    async fn list_revisions(
-        &self,
-        job_id: &str,
-    ) -> Result<Vec<chronon_core::models::JobRevision>> {
+    async fn list_revisions(&self, job_id: &str) -> Result<Vec<chronon_core::models::JobRevision>> {
         self.sql.list_revisions(job_id).await
     }
 
@@ -221,10 +206,7 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
         self.sql.upsert_script(script).await
     }
 
-    async fn get_script(
-        &self,
-        script_name: &str,
-    ) -> Result<Option<chronon_core::models::Script>> {
+    async fn get_script(&self, script_name: &str) -> Result<Option<chronon_core::models::Script>> {
         self.sql.get_script(script_name).await
     }
 
@@ -245,9 +227,7 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
         job_id: &str,
         completed_at: DateTime<Utc>,
     ) -> Result<()> {
-        self.sql
-            .mark_run_once_completed(job_id, completed_at)
-            .await
+        self.sql.mark_run_once_completed(job_id, completed_at).await
     }
 
     async fn release_run_once_claim(

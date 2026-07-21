@@ -6,7 +6,10 @@ macro_rules! delegate_scheduler_store {
     ($wrapper:ty, $field:ident) => {
         #[::async_trait::async_trait]
         impl ::chronon_core::store::SchedulerStore for $wrapper {
-            async fn upsert_job(&self, job: &::chronon_core::models::Job) -> ::chronon_core::Result<()> {
+            async fn upsert_job(
+                &self,
+                job: &::chronon_core::models::Job,
+            ) -> ::chronon_core::Result<()> {
                 self.$field.upsert_job(job).await
             }
 
@@ -43,11 +46,17 @@ macro_rules! delegate_scheduler_store {
                 self.$field.resume_job(job_id).await
             }
 
-            async fn create_run(&self, run: &::chronon_core::models::Run) -> ::chronon_core::Result<()> {
+            async fn create_run(
+                &self,
+                run: &::chronon_core::models::Run,
+            ) -> ::chronon_core::Result<()> {
                 self.$field.create_run(run).await
             }
 
-            async fn update_run(&self, run: &::chronon_core::models::Run) -> ::chronon_core::Result<()> {
+            async fn update_run(
+                &self,
+                run: &::chronon_core::models::Run,
+            ) -> ::chronon_core::Result<()> {
                 self.$field.update_run(run).await
             }
 

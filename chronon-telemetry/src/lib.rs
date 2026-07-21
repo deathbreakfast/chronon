@@ -3,10 +3,19 @@
 //! Host-injectable metrics and structured events for the scheduler and executor.
 //! Install a [`TelemetrySink`] on `ChrononBuilder` in `chronon-runtime` at boot.
 //!
+//! # Telemetry vs tracing
+//!
+//! - **[`TelemetrySink`]** — domain metrics/counters and testable structured events
+//!   (`record_counter`, `record_gauge`, `log_event`). Hosts implement sinks for Prometheus,
+//!   StatsD, or in-memory capture ([`RecordingSink`]).
+//! - **`tracing`** — diagnostic spans and logs in runtime/scheduler/executor. Library crates
+//!   emit spans; **hosts** initialize `tracing_subscriber` (never `ChrononBuilder`).
+//!
 //! # Sinks
 //!
 //! - [`NoOpSink`] — default discard sink
-//! - [`ConsoleSink`] — stderr output for development
+//! - [`ConsoleSink`] — stderr output for development (also emits `tracing` events when a
+//!   subscriber is installed)
 //! - [`RecordingSink`] — in-memory capture for test assertions
 //!
 //! # Metric names

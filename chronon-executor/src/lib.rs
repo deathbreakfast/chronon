@@ -28,6 +28,7 @@ use chrono::Utc;
 use chronon_core::{ContextFactory, Job, Run};
 use chronon_telemetry::TelemetrySink;
 use tokio::sync::mpsc;
+use tracing::Instrument;
 
 /// Event sent from the executor to the runtime for run status updates.
 ///
@@ -115,64 +116,76 @@ impl Executor {
         let actor_json = job.actor_json.clone();
         let run_id = run.run_id;
 
-        tokio::spawn(async move {
-            let _ = event_tx.send(ExecutorEvent::RunStarted {
-                run_id: run_id.clone(),
-            });
-            telemetry.record_counter(
-                "chronon_runs_started",
-                &[("script", script_name.as_str()), ("job", job_name.as_str())],
-                1,
-            );
+        let span = tracing::info_span!(
+            "spawn_run",
+            run_id = %run_id,
+            job_name = %job_name,
+            script_name = %script_name,
+        );
+        tokio::spawn(
+            async move {
+                let _ = event_tx.send(ExecutorEvent::RunStarted {
+                    run_id: run_id.clone(),
+                });
+                telemetry.record_counter(
+                    "chronon_runs_started",
+                    &[("script", script_name.as_str()), ("job", job_name.as_str())],
+                    1,
+                );
+                tracing::info!("run started");
 
-            let started = Utc::now();
-            let result = invoke::execute_script(invoke::ExecuteScriptRequest {
-                registry: &registry,
-                context_factory: &context_factory,
-                telemetry: &telemetry,
-                script_name: &script_name,
-                actor_json: &actor_json,
-                params_json,
-                job_name: &job_name,
-                run_id: &run_id,
-            })
-            .await;
+                let started = Utc::now();
+                let result = invoke::execute_script(invoke::ExecuteScriptRequest {
+                    registry: &registry,
+                    context_factory: &context_factory,
+                    telemetry: &telemetry,
+                    script_name: &script_name,
+                    actor_json: &actor_json,
+                    params_json,
+                    job_name: &job_name,
+                    run_id: &run_id,
+                })
+                .await;
 
-            let duration_ms = (Utc::now() - started).num_milliseconds();
-            match result {
-                Ok(()) => {
-                    let _ = event_tx.send(ExecutorEvent::RunCompleted {
-                        run_id: run_id.clone(),
-                        duration_ms,
-                    });
-                    telemetry.record_counter(
-                        "chronon_runs_completed",
-                        &[("script", script_name.as_str()), ("job", job_name.as_str())],
-                        1,
-                    );
-                }
-                Err(e) => {
-                    let error_msg = e.to_string();
-                    let _ = event_tx.send(ExecutorEvent::RunFailed {
-                        run_id: run_id.clone(),
-                        error: error_msg.clone(),
-                    });
-                    telemetry.record_counter(
-                        "chronon_runs_failed",
-                        &[("script", script_name.as_str()), ("job", job_name.as_str())],
-                        1,
-                    );
-                    telemetry.log_event(
-                        "chronon_run_failed",
-                        &[
-                            ("run_id", run_id.as_str()),
-                            ("job", job_name.as_str()),
-                            ("error", error_msg.as_str()),
-                        ],
-                    );
+                let duration_ms = (Utc::now() - started).num_milliseconds();
+                match result {
+                    Ok(()) => {
+                        let _ = event_tx.send(ExecutorEvent::RunCompleted {
+                            run_id: run_id.clone(),
+                            duration_ms,
+                        });
+                        telemetry.record_counter(
+                            "chronon_runs_completed",
+                            &[("script", script_name.as_str()), ("job", job_name.as_str())],
+                            1,
+                        );
+                        tracing::info!(duration_ms, "run completed");
+                    }
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        let _ = event_tx.send(ExecutorEvent::RunFailed {
+                            run_id: run_id.clone(),
+                            error: error_msg.clone(),
+                        });
+                        telemetry.record_counter(
+                            "chronon_runs_failed",
+                            &[("script", script_name.as_str()), ("job", job_name.as_str())],
+                            1,
+                        );
+                        telemetry.log_event(
+                            "chronon_run_failed",
+                            &[
+                                ("run_id", run_id.as_str()),
+                                ("job", job_name.as_str()),
+                                ("error", error_msg.as_str()),
+                            ],
+                        );
+                        tracing::warn!(duration_ms, error = %error_msg, "run failed");
+                    }
                 }
             }
-        });
+            .instrument(span),
+        );
     }
 }
 
@@ -202,7 +215,7 @@ mod tests {
         *LAST_PARAMS.lock().unwrap() = None;
         let registry = Arc::new({
             let mut r = ScriptRegistry::new();
-            r.register(ScriptDescriptor::new("probe", param_probe));
+            r.register(&ScriptDescriptor::new("probe", param_probe));
             r
         });
         let (tx, mut rx) = mpsc::unbounded_channel();

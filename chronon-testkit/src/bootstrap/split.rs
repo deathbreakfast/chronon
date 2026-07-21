@@ -7,7 +7,7 @@ use chronon_core::store::SchedulerStore;
 use chronon_core::JsonScriptContextFactory;
 use chronon_runtime::ChrononBuilder;
 
-use super::{fresh_registry, telemetry_for_matrix, SplitHandle, BootstrapSession};
+use super::{fresh_registry, telemetry_for_matrix, BootstrapSession, SplitHandle};
 
 impl BootstrapSession {
     /// Start in-process coordinator and one worker task for split deployment rows.
@@ -31,7 +31,11 @@ impl BootstrapSession {
         self.spawn_split_runtime(worker_count, false).await
     }
 
-    async fn spawn_split_runtime(&mut self, worker_count: u32, with_coordinator: bool) -> Result<()> {
+    async fn spawn_split_runtime(
+        &mut self,
+        worker_count: u32,
+        with_coordinator: bool,
+    ) -> Result<()> {
         let count = worker_count.max(1);
         let store = self
             .store

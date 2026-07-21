@@ -43,7 +43,7 @@ pub use store::InMemorySchedulerStore;
 
 use std::sync::Arc;
 
-use chronon_core::{DEFAULT_STORE_NAME, StoreRouter};
+use chronon_core::{StoreRouter, DEFAULT_STORE_NAME};
 
 /// Registers a new in-memory store as the global default.
 ///

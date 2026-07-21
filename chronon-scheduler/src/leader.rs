@@ -34,10 +34,7 @@ pub async fn try_acquire_leader(
 /// Renews the leader lease for `instance_id` if it currently holds leadership.
 ///
 /// Fails when another instance has taken over or the lease expired.
-pub async fn renew_leader_lease(
-    store: &Arc<dyn SchedulerStore>,
-    instance_id: &str,
-) -> Result<()> {
+pub async fn renew_leader_lease(store: &Arc<dyn SchedulerStore>, instance_id: &str) -> Result<()> {
     store
         .renew_leader_lease(instance_id, leader_ttl_secs_from_env())
         .await

@@ -78,10 +78,21 @@ File SLOC is enforced via Sentrux + review judgment (no repo scripts). Use local
 - Verify: `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps`, then `cargo doc -p uf-chronon --all-features --no-deps`, and `cargo test --doc` on crates with examples
 - Facade links feature-gated types; always document `uf-chronon` with `--all-features` (also set in `[package.metadata.docs.rs]`)
 
+### Error handling
+
+- Library crates return typed [`ChrononError`](chronon-core/src/error.rs) (`thiserror`); prefer matching variants over string inspection
+- Binary/tool crates (`chronon-bench`, test helpers) may use `anyhow` for propagation
+- Preserve `Error::source` chains for storage failures (`ChrononError::storage_source`)
+- Do not use `.unwrap()` / `.expect()` for recoverable errors in library code
+
 ### Lint policy
 
-- Clippy: pedantic + nursery, `-D warnings` in CI
-- No new `#[allow(dead_code)]` or inline clippy allows — fix or use root `clippy.toml`
+- Clippy: `all` + `pedantic` + `nursery`, `-D warnings` in CI
+- Restriction lints: `unwrap_used`, `expect_used`, `dbg_macro`, `print_stdout` (tests exempt via [`clippy.toml`](clippy.toml))
+- Workspace allows stay limited to low-signal pedantic noise (casts, `must_use_candidate`, doc detail lints) plus intentional `unnecessary_wraps` / `significant_drop_tightening` for store helpers — see root [`Cargo.toml`](Cargo.toml) `[workspace.lints.clippy]`
+- Prefer fixing code over new `#[allow(clippy::…)]`; justified exceptions go in root `Cargo.toml` or `clippy.toml`
+- No new `#[allow(dead_code)]`
+- CI also runs `cargo fmt --all -- --check`
 - `cargo deny check` — advisories, licenses, git sources (`deny.toml`)
 - `cargo machete` — no unused dependencies
 

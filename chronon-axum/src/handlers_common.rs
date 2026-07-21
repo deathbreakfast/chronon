@@ -1,5 +1,7 @@
 //! JSON envelope shared by all Chronon API responses.
 
+use axum::{http::StatusCode, Json};
+use chronon_core::ChrononError;
 use serde::{Deserialize, Serialize};
 
 /// Standard API wrapper: `success`, optional `data`, optional `error`.
@@ -33,4 +35,25 @@ impl<T> ApiResponse<T> {
             error: Some(error.into()),
         }
     }
+}
+
+/// Map a [`ChrononError`] to an HTTP status code for Chronon API routes.
+pub fn chronon_status(err: &ChrononError) -> StatusCode {
+    match err {
+        ChrononError::JobNotFound(_) | ChrononError::RunNotFound(_) => StatusCode::NOT_FOUND,
+        ChrononError::ScriptNotFound(_)
+        | ChrononError::InvalidCron(_)
+        | ChrononError::InvalidTimezone(_)
+        | ChrononError::ParamError(_)
+        | ChrononError::Identity(_) => StatusCode::BAD_REQUEST,
+        ChrononError::ScriptMismatch { .. } => StatusCode::CONFLICT,
+        ChrononError::StorageError { .. } | ChrononError::Internal(_) => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
+
+/// Error envelope with status derived from [`chronon_status`].
+pub fn chronon_err<T>(err: &ChrononError) -> (StatusCode, Json<ApiResponse<T>>) {
+    (chronon_status(err), Json(ApiResponse::err(err.to_string())))
 }

@@ -1,5 +1,6 @@
 //! Regression: two multibench clients drain a shared queue concurrently.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -63,7 +64,10 @@ async fn multibench_drain_only_waits_for_prefill() {
     std::env::remove_var("CHRONON_CH7_DRAIN_IDLE_SECS");
     std::env::remove_var("CHRONON_CH7_PREFILL_WAIT_SECS");
 
-    assert_eq!(ops1, prefill, "drain-only client drains after prefill appears");
+    assert_eq!(
+        ops1, prefill,
+        "drain-only client drains after prefill appears"
+    );
     assert!(
         elapsed >= Duration::from_millis(40),
         "drain-only client must poll until work appears, not exit instantly ({elapsed:?})"
@@ -113,6 +117,12 @@ async fn multibench_dual_drain_after_prefill() {
     std::env::remove_var("CHRONON_CH7_DRAIN_IDLE_SECS");
 
     assert_eq!(ops0 + ops1, prefill, "all runs claimed exactly once");
-    assert!(ops0 >= 1, "client 0 must claim at least one run, got {ops0}");
-    assert!(ops1 >= 1, "client 1 must claim at least one run, got {ops1}");
+    assert!(
+        ops0 >= 1,
+        "client 0 must claim at least one run, got {ops0}"
+    );
+    assert!(
+        ops1 >= 1,
+        "client 1 must claim at least one run, got {ops1}"
+    );
 }

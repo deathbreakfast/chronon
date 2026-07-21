@@ -167,9 +167,13 @@ pub async fn postgres_redis_hybrid_claim_roundtrip_smoke() -> Result<()> {
 
     let mut session = install_postgres_redis_split().await?;
     let store = session.store_dyn()?;
-    let mut job =
-        upsert_immediate_cron_job(store.as_ref(), "hybrid-roundtrip", NOOP_SCRIPT, "0 * * * * *")
-            .await?;
+    let mut job = upsert_immediate_cron_job(
+        store.as_ref(),
+        "hybrid-roundtrip",
+        NOOP_SCRIPT,
+        "0 * * * * *",
+    )
+    .await?;
     job.actor_json = smoke_actor_json();
     store.upsert_job(&job).await?;
 

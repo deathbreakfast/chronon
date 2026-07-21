@@ -46,8 +46,7 @@ impl BootstrapSession {
             StorageAdapter::PostgresRedis => {
                 let url = chronon_backend_postgres::postgres_test_url();
                 let schema = format!("chronon_test_{}", uuid::Uuid::new_v4());
-                let sql =
-                    Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?);
+                let sql = Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?);
                 let redis_url = std::env::var("CHRONON_REDIS_URL")
                     .or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))
                     .map_err(|_| {
