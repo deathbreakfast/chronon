@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
 
-Or depend on the facade with the macro re-exported (crates.io package is **`uf-chronon`**; the unrelated crate named `chronon` is not this project):
+Or depend on the public crate with the macro re-exported (crates.io package is **`uf-chronon`**; the unrelated crate named `chronon` is not this project):
 
 ```toml
 chronon = { package = "uf-chronon", version = "0.1", features = ["mem"] }

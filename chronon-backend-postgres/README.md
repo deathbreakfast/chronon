@@ -33,7 +33,11 @@ Runnable example: `cargo run -p uf-chronon --example postgres_boot --features po
 
 Use `postgres_test_url()` to resolve URL precedence in test helpers.
 
-## Facade feature
+Isolated schemas (`PostgresSchedulerStore::connect_isolated` / `CHRONON_POSTGRES_SCHEMA`)
+must pass [`validate_postgres_schema_name`](https://docs.rs/chronon-backend-sql-common) —
+only `^[A-Za-z_][A-Za-z0-9_]*$` up to 63 characters.
+
+## Cargo feature
 
 Enable via `chronon` crate feature `postgres`:
 

@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, Notify};
 /// Named deployment assembly — not a global mode enum.
 ///
 /// Selected via [`ChrononBuilder`] fluent methods; drives which loops
-/// [`crate::Chronon::run`] starts. Maps to the facade getting-started modes:
+/// [`crate::Chronon::run`] starts. Maps to the public crate getting-started modes:
 ///
 /// | Shape | Builder | Local loops | When to use |
 /// |-------|---------|-------------|-------------|

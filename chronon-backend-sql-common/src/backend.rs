@@ -37,6 +37,41 @@ pub fn bind_sql(dialect: SqlDialect, sql: &str) -> String {
     }
 }
 
+/// Maximum length for an isolated Postgres schema identifier (Postgres `NAMEDATALEN` - 1).
+const MAX_POSTGRES_SCHEMA_NAME_LEN: usize = 63;
+
+/// Validate a Postgres schema name before interpolating it into DDL / `search_path`.
+///
+/// Accepts only `^[A-Za-z_][A-Za-z0-9_]*$` up to 63 characters. Rejects quote breakouts and
+/// other identifier injection patterns.
+///
+/// # Errors
+///
+/// Returns [`chronon_core::ChrononError::ParamError`] when the name is empty, too long, or
+/// contains disallowed characters.
+pub fn validate_postgres_schema_name(schema: &str) -> Result<()> {
+    if schema.is_empty() || schema.len() > MAX_POSTGRES_SCHEMA_NAME_LEN {
+        return Err(chronon_core::ChrononError::ParamError(format!(
+            "postgres schema name must be 1..{MAX_POSTGRES_SCHEMA_NAME_LEN} characters"
+        )));
+    }
+    let mut chars = schema.chars();
+    let first = chars.next().ok_or_else(|| {
+        chronon_core::ChrononError::ParamError("postgres schema name must not be empty".into())
+    })?;
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return Err(chronon_core::ChrononError::ParamError(
+            "postgres schema name must start with ASCII letter or underscore".into(),
+        ));
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(chronon_core::ChrononError::ParamError(
+            "postgres schema name may contain only ASCII letters, digits, and underscores".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// SQL dialect for query variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqlDialect {
@@ -103,8 +138,11 @@ impl SqlSchedulerStore {
     ///
     /// # Errors
     ///
-    /// Returns a storage error if schema creation, pool connection, or bootstrap fails.
+    /// Returns [`chronon_core::ChrononError::ParamError`] when `schema` fails
+    /// [`validate_postgres_schema_name`]. Returns a storage error if schema creation, pool
+    /// connection, or bootstrap fails.
     pub async fn connect_postgres_isolated(url: &str, schema: &str) -> Result<Self> {
+        validate_postgres_schema_name(schema)?;
         let admin = sqlx::postgres::PgPoolOptions::new()
             .max_connections(1)
             .connect(url)
@@ -137,8 +175,10 @@ impl SqlSchedulerStore {
     ///
     /// # Errors
     ///
-    /// Returns a storage error if the pool cannot be opened.
+    /// Returns [`chronon_core::ChrononError::ParamError`] when `schema` fails
+    /// [`validate_postgres_schema_name`]. Returns a storage error if the pool cannot be opened.
     pub async fn attach_postgres_isolated(url: &str, schema: &str) -> Result<Self> {
+        validate_postgres_schema_name(schema)?;
         let schema = schema.to_string();
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(postgres_max_connections())
@@ -215,8 +255,11 @@ impl SqlSchedulerStore {
     ///
     /// # Errors
     ///
-    /// Returns a storage error when the admin connection or DDL fails.
+    /// Returns [`chronon_core::ChrononError::ParamError`] when `schema` fails
+    /// [`validate_postgres_schema_name`]. Returns a storage error when the admin connection or
+    /// DDL fails.
     pub async fn drop_postgres_schema(url: &str, schema: &str) -> Result<()> {
+        validate_postgres_schema_name(schema)?;
         let admin = sqlx::postgres::PgPoolOptions::new()
             .max_connections(1)
             .connect(url)
@@ -238,7 +281,7 @@ impl fmt::Debug for SqlSchedulerStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{bind_sql, SqlDialect};
+    use super::{bind_sql, validate_postgres_schema_name, SqlDialect};
 
     #[test]
     fn bind_sql_sqlite_passthrough() {
@@ -253,5 +296,32 @@ mod tests {
             bind_sql(SqlDialect::Postgres, sql),
             "UPDATE t SET a = $1, b = $2 WHERE id = $3"
         );
+    }
+
+    #[test]
+    fn schema_name_accepts_safe_identifiers() {
+        assert!(validate_postgres_schema_name("bench_cell_1").is_ok());
+        assert!(validate_postgres_schema_name("_tmp").is_ok());
+        assert!(validate_postgres_schema_name("A").is_ok());
+    }
+
+    #[test]
+    fn schema_name_rejects_injection_and_empty() {
+        use chronon_core::ChrononError;
+
+        let too_long = "x".repeat(64);
+        for name in [
+            "",
+            "a\";drop",
+            "evil-name",
+            "1leading",
+            "has space",
+            too_long.as_str(),
+        ] {
+            match validate_postgres_schema_name(name) {
+                Err(ChrononError::ParamError(_)) => {}
+                other => panic!("expected ParamError for {name:?}, got {other:?}"),
+            }
+        }
     }
 }

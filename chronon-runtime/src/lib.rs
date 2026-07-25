@@ -3,7 +3,7 @@
 //! Wires store, scheduler, executor, and background loops via [`ChrononBuilder`]. Hosts select
 //! a [`DeploymentShape`] (embedded, coordinator-only, worker, or remote client) at build time.
 //!
-//! Start with the facade crate docs (`chronon`) for a guided topology walkthrough. This crate
+//! Start with the public crate docs (`chronon`) for a guided topology walkthrough. This crate
 //! holds the assembly APIs: [`ChrononBuilder`], [`Chronon::run`], [`CoordinatorService`], and
 //! [`RemoteCoordinatorClient`].
 //!

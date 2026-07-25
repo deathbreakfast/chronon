@@ -13,7 +13,7 @@ use serde_json::Value;
 /// | [`Self::Manual`] | **No** | — | `CoordinatorService::run_now` or HTTP `POST /jobs/run_now` |
 ///
 /// Persist via coordinator upsert; cron next-fire is computed there when
-/// `schedule_kind == Cron`. See the `chronon` facade getting-started §5.
+/// `schedule_kind == Cron`. See the `chronon` crate getting-started §5.
 ///
 /// # Examples
 ///
@@ -44,6 +44,21 @@ pub enum ScheduleKind {
     /// Never due for the tick loop — enqueue only via `run_now` (in-process or HTTP).
     Manual,
 }
+
+/// Maximum concurrent runs accepted for a single job (API / model clamp).
+pub const MAX_JOB_CONCURRENCY: i32 = 1_000;
+
+/// Maximum per-run timeout in milliseconds (24 hours).
+pub const MAX_TIMEOUT_MS: i64 = 86_400_000;
+
+/// Maximum additional retry attempts after the first execution.
+pub const MAX_RETRY_ATTEMPTS: u32 = 100;
+
+/// Maximum retry delay (base or cap) in milliseconds (24 hours).
+pub const MAX_RETRY_DELAY_MS: u64 = 86_400_000;
+
+/// Maximum page size for list APIs (jobs and runs).
+pub const MAX_LIST_LIMIT: usize = 1_000;
 
 /// Retry policy for failed or timed-out runs.
 ///
@@ -96,6 +111,20 @@ impl RetryPolicy {
             ms.min(self.max_delay_ms)
         }
     }
+
+    /// Clamp retry knobs to production-safe ceilings ([`MAX_RETRY_ATTEMPTS`], [`MAX_RETRY_DELAY_MS`]).
+    #[must_use]
+    pub fn clamp_security_bounds(mut self) -> Self {
+        self.max_attempts = self.max_attempts.min(MAX_RETRY_ATTEMPTS);
+        self.base_delay_ms = self.base_delay_ms.min(MAX_RETRY_DELAY_MS);
+        if self.max_delay_ms != 0 {
+            self.max_delay_ms = self.max_delay_ms.min(MAX_RETRY_DELAY_MS);
+        }
+        if !self.backoff_multiplier.is_finite() || self.backoff_multiplier < 1.0 {
+            self.backoff_multiplier = 1.0;
+        }
+        self
+    }
 }
 
 /// Policy for handling missed scheduled fires at tick time.
@@ -120,7 +149,7 @@ pub struct MisfirePolicy {
 /// |-------------|---------|
 /// | `script_name` / `params_json` | What to run and with which args |
 /// | `schedule_kind` + cron / run-once fields | When it becomes due |
-/// | `actor_json` | Identity restored by [`crate::ContextFactory`] at dispatch |
+/// | `actor_json` | Identity snapshotted onto each run at enqueue; dispatch uses the **run** snapshot |
 /// | `pool` / placement | Worker pool targeting in split deployments |
 ///
 /// # Examples
@@ -199,7 +228,8 @@ pub struct Job {
     pub placement_json: Option<Value>,
 
     // Identity for permission reconstruction
-    /// Serialized Actor for identity reconstruction.
+    /// Serialized actor identity. Copied onto each run at enqueue; workers rebuild context
+    /// from the **run** snapshot so later job updates cannot change queued identity.
     pub actor_json: Value,
 
     /// Parameters to pass to the script.
@@ -306,6 +336,22 @@ impl Job {
     pub fn set_misfire_policy(&mut self, policy: &MisfirePolicy) {
         self.misfire_policy_json = serde_json::to_value(policy).unwrap_or_default();
     }
+
+    /// Clamp concurrency, timeout, and retry policy to production-safe ceilings.
+    ///
+    /// Applied by the HTTP upsert path and available to hosts before persist.
+    pub fn clamp_security_bounds(&mut self) {
+        self.concurrency = self.concurrency.clamp(1, MAX_JOB_CONCURRENCY);
+        if let Some(ms) = self.timeout_ms {
+            if ms <= 0 {
+                self.timeout_ms = None;
+            } else {
+                self.timeout_ms = Some(ms.min(MAX_TIMEOUT_MS));
+            }
+        }
+        let clamped = self.retry_policy().clamp_security_bounds();
+        self.set_retry_policy(&clamped);
+    }
 }
 
 #[cfg(test)]
@@ -353,5 +399,50 @@ mod policy_tests {
         assert_eq!(job.retry_policy().max_attempts, 2);
         assert!(job.misfire_policy().run_immediately);
         assert_eq!(job.misfire_policy().max_misfire_window_secs, 3600);
+    }
+
+    #[test]
+    fn clamp_security_bounds_caps_extremes() {
+        let mut job = Job::new("n", "s");
+        job.concurrency = i32::MAX;
+        job.timeout_ms = Some(i64::MAX);
+        job.set_retry_policy(&RetryPolicy {
+            max_attempts: MAX_RETRY_ATTEMPTS.saturating_mul(10),
+            base_delay_ms: MAX_RETRY_DELAY_MS.saturating_mul(2),
+            backoff_multiplier: 0.5,
+            max_delay_ms: MAX_RETRY_DELAY_MS.saturating_mul(2),
+        });
+        job.clamp_security_bounds();
+        assert_eq!(job.concurrency, MAX_JOB_CONCURRENCY);
+        assert_eq!(job.timeout_ms, Some(MAX_TIMEOUT_MS));
+        let retry = job.retry_policy();
+        assert_eq!(retry.max_attempts, MAX_RETRY_ATTEMPTS);
+        assert_eq!(retry.base_delay_ms, MAX_RETRY_DELAY_MS);
+        assert_eq!(retry.max_delay_ms, MAX_RETRY_DELAY_MS);
+        assert!((retry.backoff_multiplier - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn clamp_security_bounds_clears_non_positive_timeout() {
+        let mut job = Job::new("n", "s");
+        job.timeout_ms = Some(0);
+        job.clamp_security_bounds();
+        assert_eq!(job.timeout_ms, None);
+    }
+
+    #[test]
+    fn clamp_security_bounds_on_raw_extreme_json() {
+        let mut job = Job::new("n", "s");
+        job.retry_policy_json = serde_json::json!({
+            "max_attempts": 9_999_999_u64,
+            "base_delay_ms": 9_999_999_999_u64,
+            "backoff_multiplier": 2.0,
+            "max_delay_ms": 9_999_999_999_u64
+        });
+        job.clamp_security_bounds();
+        let retry = job.retry_policy();
+        assert_eq!(retry.max_attempts, MAX_RETRY_ATTEMPTS);
+        assert_eq!(retry.base_delay_ms, MAX_RETRY_DELAY_MS);
+        assert_eq!(retry.max_delay_ms, MAX_RETRY_DELAY_MS);
     }
 }

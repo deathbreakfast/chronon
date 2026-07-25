@@ -43,7 +43,7 @@ Runnable example: `cargo run -p uf-chronon --example postgres_redis_boot --featu
 | `CHRONON_REDIS_URL` | — | Production URL (convention) |
 | `CHRONON_TEST_REDIS_URL` | `redis://127.0.0.1:6379` | Test default via `RedisQueueLayer::test_url()` |
 
-## Facade features
+## Cargo features
 
 Enable **both** `postgres` and `redis`:
 
@@ -51,7 +51,7 @@ Enable **both** `postgres` and `redis`:
 chronon = { package = "uf-chronon", version = "0.1", default-features = false, features = ["postgres", "redis"] }
 ```
 
-The `redis` feature implies `postgres` in the facade manifest.
+The `redis` feature implies `postgres` in the public crate manifest.
 
 ## Contract tests
 

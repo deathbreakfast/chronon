@@ -117,6 +117,112 @@ async fn upsert_job_ok() {
 }
 
 #[tokio::test]
+async fn upsert_job_preserves_job_id_by_name() {
+    let state = test_state();
+    let app = test_app(state.clone());
+    let body1 = serde_json::json!({
+        "job_name": "stable-name",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+        "enabled": true,
+        "concurrency": 1,
+    });
+    let resp1 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body1.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp1.status(), StatusCode::OK);
+    let first: ApiResponse<JobResponse> = json_body(resp1).await;
+    let job_id = first.data.as_ref().unwrap().job_id.clone();
+
+    let body2 = serde_json::json!({
+        "job_name": "stable-name",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+        "enabled": false,
+        "concurrency": 2,
+    });
+    let resp2 = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body2.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp2.status(), StatusCode::OK);
+    let second: ApiResponse<JobResponse> = json_body(resp2).await;
+    let updated = second.data.unwrap();
+    assert_eq!(updated.job_id, job_id);
+    assert!(!updated.enabled);
+    assert_eq!(updated.current_revision, 2);
+
+    let list = test_app(state)
+        .oneshot(Request::builder().uri("/jobs").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let listed: ApiResponse<Vec<JobResponse>> = json_body(list).await;
+    assert_eq!(listed.data.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn upsert_job_clamps_extreme_policy_knobs() {
+    let state = test_state();
+    let app = test_app(state.clone());
+    let body = serde_json::json!({
+        "job_name": "bounded",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+        "concurrency": 9_999_999,
+        "timeout_ms": 9_999_999_999_i64,
+        "retry_policy": {
+            "max_attempts": 9_999_999,
+            "base_delay_ms": 9_999_999_999_u64,
+            "backoff_multiplier": 2.0,
+            "max_delay_ms": 9_999_999_999_u64
+        }
+    });
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let parsed: ApiResponse<JobResponse> = json_body(resp).await;
+    let job_id = parsed.data.unwrap().job_id;
+    let job = state
+        .chronon
+        .coordinator
+        .get_job(&job_id)
+        .await
+        .expect("job stored");
+    assert_eq!(job.concurrency, chronon_core::MAX_JOB_CONCURRENCY);
+    assert_eq!(job.timeout_ms, Some(chronon_core::MAX_TIMEOUT_MS));
+    assert_eq!(
+        job.retry_policy().max_attempts,
+        chronon_core::MAX_RETRY_ATTEMPTS
+    );
+}
+
+#[tokio::test]
 async fn upsert_job_script_not_found() {
     let app = test_app(test_state());
     let body = serde_json::json!({
@@ -135,6 +241,9 @@ async fn upsert_job_script_not_found() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let parsed: ApiResponse<JobResponse> = json_body(resp).await;
+    assert!(!parsed.success);
+    assert!(parsed.error.is_some());
 }
 
 #[tokio::test]
@@ -334,6 +443,85 @@ async fn get_job_revisions_ok() {
 }
 
 #[tokio::test]
+async fn get_job_revisions_redacts_sensitive_fields() {
+    let state = test_state();
+    let app = test_app(state.clone());
+    let body = serde_json::json!({
+        "job_name": "secret-job",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+        "params": { "token": "super-secret" },
+        "actor_json": { "role": "admin", "session": "sess-1" },
+    });
+    let upsert = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let parsed: ApiResponse<JobResponse> = json_body(upsert).await;
+    let job_id = parsed.data.unwrap().job_id;
+
+    let resp = test_app(state.clone())
+        .oneshot(
+            Request::builder()
+                .uri(format!("/jobs/{job_id}/revisions"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let revisions: ApiResponse<Vec<serde_json::Value>> = json_body(resp).await;
+    let rev = &revisions.data.unwrap()[0];
+    assert!(rev.get("changed_by_actor_json").unwrap().is_null());
+    let snapshot = rev.get("snapshot_json").unwrap();
+    assert!(snapshot.get("actor_json").unwrap().is_null());
+    assert!(snapshot.get("params_json").unwrap().is_null());
+    assert_eq!(
+        snapshot.get("job_name").and_then(|v| v.as_str()),
+        Some("secret-job")
+    );
+
+    let store_revs = state
+        .chronon
+        .coordinator
+        .list_revisions(&job_id)
+        .await
+        .expect("store revisions");
+    let store_snap = &store_revs[0].snapshot_json;
+    assert_eq!(
+        store_snap.get("actor_json"),
+        Some(&serde_json::json!({ "role": "admin", "session": "sess-1" }))
+    );
+    assert_eq!(
+        store_snap.get("params_json"),
+        Some(&serde_json::json!({ "token": "super-secret" }))
+    );
+}
+
+#[tokio::test]
+async fn get_job_revisions_not_found() {
+    let app = test_app(test_state());
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/jobs/missing-job/revisions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn list_runs_ok() {
     let state = test_state();
     let job = seed_job(&state, "runs-job").await;
@@ -346,6 +534,44 @@ async fn list_runs_ok() {
     assert_eq!(resp.status(), StatusCode::OK);
     let parsed: ApiResponse<Vec<RunResponse>> = json_body(resp).await;
     assert_eq!(parsed.data.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn list_runs_clamps_limit() {
+    let state = test_state();
+    let job = seed_job(&state, "runs-limit").await;
+    for _ in 0..3 {
+        seed_run(&state, &job).await;
+    }
+    let app = test_app(state);
+    let over = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/runs?limit=1000000")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(over.status(), StatusCode::OK);
+    let parsed: ApiResponse<Vec<RunResponse>> = json_body(over).await;
+    // Cap is applied before the store query (`clamp_list_limit`); with fewer rows than the
+    // cap we still return all three. Unit coverage of the exact cap lives on `clamp_list_limit`.
+    assert_eq!(parsed.data.unwrap().len(), 3);
+
+    let in_range = app
+        .oneshot(
+            Request::builder()
+                .uri("/runs?limit=2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(in_range.status(), StatusCode::OK);
+    let parsed: ApiResponse<Vec<RunResponse>> = json_body(in_range).await;
+    assert_eq!(parsed.data.unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -426,5 +652,60 @@ async fn list_runs_filtered_by_status() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let parsed: ApiResponse<Vec<RunResponse>> = json_body(resp).await;
+    assert_eq!(parsed.data.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn auth_middleware_rejects_without_bearer() {
+    use axum::http::header;
+    use axum::middleware::{self, Next};
+    use axum::response::{IntoResponse, Response};
+
+    const DEMO_TOKEN: &str = "demo-chronon-admin-token";
+
+    async fn require_bearer(req: Request<Body>, next: Next) -> Response {
+        let authorized = req
+            .headers()
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v == format!("Bearer {DEMO_TOKEN}"));
+        if authorized {
+            next.run(req).await
+        } else {
+            StatusCode::UNAUTHORIZED.into_response()
+        }
+    }
+
+    let state = test_state();
+    let app = Router::new()
+        .merge(chronon_router::<AppState>())
+        .layer(middleware::from_fn(require_bearer))
+        .with_state(state);
+
+    let denied = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/scripts")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+
+    let allowed = app
+        .oneshot(
+            Request::builder()
+                .uri("/scripts")
+                .header(header::AUTHORIZATION, format!("Bearer {DEMO_TOKEN}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed.status(), StatusCode::OK);
+    let parsed: ApiResponse<Vec<ScriptResponse>> = json_body(allowed).await;
+    assert!(parsed.success);
     assert_eq!(parsed.data.unwrap().len(), 1);
 }

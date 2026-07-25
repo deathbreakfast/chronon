@@ -1,6 +1,9 @@
 //! Shared SQL [`SchedulerStore`](chronon_core::store::SchedulerStore) for `PostgreSQL` and `SQLite`.
 //!
-//! **Audience:** backend and platform engineers implementing or extending SQL persistence.
+//! Backend and platform engineers use this crate when implementing or extending SQL persistence.
+//! Application binaries should prefer the thin wrappers
+//! [`chronon_backend_postgres`](https://docs.rs/chronon-backend-postgres) or
+//! [`chronon_backend_sqlite`](https://docs.rs/chronon-backend-sqlite).
 //!
 //! ## Stack position
 //!
@@ -8,21 +11,18 @@
 //! chronon-backend-{postgres,sqlite} → chronon-backend-sql-common → chronon-core
 //! ```
 //!
-//! Integrators typically use the thin wrapper crates
-//! [`chronon_backend_postgres`](https://docs.rs/chronon-backend-postgres) or
-//! [`chronon_backend_sqlite`](https://docs.rs/chronon-backend-sqlite) rather than
-//! depending on this crate directly.
-//!
 //! ## Entry points
 //!
 //! - [`SqlSchedulerStore`] — connect, schema bootstrap, and trait implementation
 //! - [`SqlDialect`] / [`SqlPool`] — engine selection and pool wrapper
 //! - [`bind_sql`] — dialect-specific placeholder rewriting (`?` → `$1`, …)
+//! - [`validate_postgres_schema_name`] — allowlist for isolated schema DDL / `search_path`
 //!
 //! ## Prerequisites
 //!
 //! Schema bootstrap runs on connect. For parallel Postgres tests use
-//! [`SqlSchedulerStore::connect_postgres_isolated`].
+//! [`SqlSchedulerStore::connect_postgres_isolated`] (schema names must match
+//! [`validate_postgres_schema_name`]).
 //!
 //! ## Example
 //!
@@ -50,7 +50,9 @@ mod store_impl;
 #[cfg(test)]
 mod store_smoke;
 
-pub use backend::{bind_sql, SqlDialect, SqlPool, SqlSchedulerStore};
+pub use backend::{
+    bind_sql, validate_postgres_schema_name, SqlDialect, SqlPool, SqlSchedulerStore,
+};
 pub use coordinator::LEADER_ROW_ID;
 pub use row::run_pool_key;
 pub use row::{row_to_worker, SchedulerLeaderRow};

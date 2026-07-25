@@ -36,6 +36,7 @@ cargo test --doc -p chronon-axum
 Run cargo commands **sequentially** — do not parallelize builds in multiple shells.
 
 See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full pre-PR checklist and coverage baseline.
+See [`SECURITY.md`](SECURITY.md) for production trust boundaries (HTTP auth, identity, store credentials).
 
 ## Pull requests
 
@@ -46,13 +47,6 @@ See [`docs/VERIFICATION.md`](docs/VERIFICATION.md) for the full pre-PR checklist
 
 ## Code quality
 
-### Sentrux (before finishing)
-
-Record baseline `quality_signal` (currently **7424**) before changes; do not regress without justification.
-
-1. `scan` with path set to the repository root
-2. `check_rules` — zero violations (see `.sentrux/rules.toml`)
-3. After module boundary changes: `dsm` with `format=stats`
 
 ### Module discipline
 
@@ -64,11 +58,11 @@ Record baseline `quality_signal` (currently **7424**) before changes; do not reg
 | Cyclomatic complexity | ≤ 25 per function |
 
 - No god files or kitchen sinks — one responsibility per module
-- No wildcard `pub use foo::*` in `lib.rs` or facade modules
+- No wildcard `pub use foo::*` in `lib.rs` or public modules
 - Keep `lib.rs` thin (mod declarations, named re-exports, crate docs)
 - Exemplar: `chronon-axum/src/handlers.rs` — small per-route handlers
 
-File SLOC is enforced via Sentrux + review judgment (no repo scripts). Use local `tokei` when sizing a split.
+File SLOC is enforced via review judgment. Use local `tokei` when sizing a split.
 
 ### Rustdoc
 
@@ -76,7 +70,7 @@ File SLOC is enforced via Sentrux + review judgment (no repo scripts). Use local
 - `///` on every public item you add or change; add `# Examples` on major entry points
 - No `#![allow(missing_docs)]` without explicit approval
 - Verify: `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude uf-chronon --no-deps`, then `cargo doc -p uf-chronon --all-features --no-deps`, and `cargo test --doc` on crates with examples
-- Facade links feature-gated types; always document `uf-chronon` with `--all-features` (also set in `[package.metadata.docs.rs]`)
+- The public crate links feature-gated types; always document `uf-chronon` with `--all-features` (also set in `[package.metadata.docs.rs]`)
 
 ### Error handling
 
@@ -99,7 +93,7 @@ File SLOC is enforced via Sentrux + review judgment (no repo scripts). Use local
 ### Crate layering
 
 ```
-chronon (facade) → chronon-runtime → chronon-{scheduler,executor} → chronon-core
+chronon (public crate) → chronon-runtime → chronon-{scheduler,executor} → chronon-core
 chronon-backend-mem → chronon-core
 chronon-backend-{postgres,sqlite} → chronon-backend-sql-common → chronon-core
 chronon-backend-redis → chronon-backend-{postgres,sql-common} → chronon-core
@@ -111,8 +105,6 @@ Lower layers must not import testkit, e2e, or bench crates.
 
 ## Definition of done
 
-- [ ] Sentrux `scan` + `check_rules`: pass, 0 violations
-- [ ] Sentrux `quality_signal`: ≥ baseline
 - [ ] `cargo deny check`: pass
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`: clean
 - [ ] `cargo test --workspace --exclude chronon-e2e --exclude chronon-bench`: all pass
@@ -124,7 +116,7 @@ Lower layers must not import testkit, e2e, or bench crates.
 - [ ] `cargo test --doc` on core/runtime/scheduler/executor/axum/backend-{mem,sql-common,postgres,sqlite,redis}: pass
 - [ ] No file > 450 SLOC (code only) without splitting
 - [ ] No new function with CC > 25
-- [ ] Architectural boundaries in `.sentrux/rules.toml` preserved
+- [ ] Architectural layering boundaries preserved
 
 ## Adapter crates
 

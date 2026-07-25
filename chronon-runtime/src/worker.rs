@@ -107,7 +107,7 @@ async fn worker_slot(
                 context_factory: &executor.context_factory,
                 telemetry: &executor.telemetry,
                 script_name: &run.script_name,
-                actor_json: &job.actor_json,
+                actor_json: &run.actor_json,
                 params_json: run.params_json.clone(),
                 job_name: &job.job_name,
                 run_id: &run.run_id,
@@ -123,10 +123,7 @@ async fn worker_slot(
                             outcome.logs,
                         ),
                         Err(_) => (
-                            Err((
-                                RunStatus::Timeout,
-                                format!("run exceeded timeout_ms={ms}"),
-                            )),
+                            Err((RunStatus::Timeout, format!("run exceeded timeout_ms={ms}"))),
                             chronon_telemetry::CapturedLogs::default(),
                         ),
                     }

@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 
-use chronon_core::{ChrononError, Job, ScheduleKind};
+use chronon_core::{ChrononError, Job, ScheduleKind, MAX_LIST_LIMIT};
 
 use crate::dto::{
     JobActionRequest, JobResponse, ListJobsQuery, ListRunsQuery, RunResponse, UpsertJobRequest,
@@ -15,7 +15,17 @@ use crate::handlers_common::{chronon_err, ApiResponse};
 use crate::state::ChrononState;
 use chronon_scheduler::CronExpr;
 
-/// `POST /jobs/upsert` — create or update a job; 400 if script missing or cron invalid.
+/// Clamp optional list `limit` query to [`MAX_LIST_LIMIT`] (default 100).
+#[must_use]
+pub(crate) fn clamp_list_limit(limit: Option<usize>) -> usize {
+    limit.unwrap_or(100).min(MAX_LIST_LIMIT)
+}
+
+/// `POST /jobs/upsert` — create or update a job matched by `job_name`; 400 if script missing or cron invalid.
+///
+/// When a job with the same `job_name` already exists, its `job_id` and `created_at` are preserved and
+/// `current_revision` is bumped. Concurrency, timeout, and retry policy values are clamped to
+/// [`chronon_core::MAX_JOB_CONCURRENCY`] / [`chronon_core::MAX_TIMEOUT_MS`] / retry ceilings.
 #[tracing::instrument(skip(state, req), fields(job_name = %req.job_name, script_name = %req.script_name))]
 pub async fn upsert_job(
     State(state): State<ChrononState>,
@@ -31,7 +41,15 @@ pub async fn upsert_job(
         );
     }
 
-    let mut job = Job::new(&req.job_name, &req.script_name);
+    let mut job = match state.coordinator.get_job_by_name(&req.job_name).await {
+        Some(existing) => {
+            let mut job = existing;
+            job.script_name.clone_from(&req.script_name);
+            job.current_revision = job.current_revision.saturating_add(1);
+            job
+        }
+        None => Job::new(&req.job_name, &req.script_name),
+    };
     job.enabled = req.enabled;
     job.schedule_kind = req.schedule_kind.into();
     job.cron_expr = req.cron_expr.clone();
@@ -54,6 +72,7 @@ pub async fn upsert_job(
             job.misfire_policy_json = policy.clone();
         }
     }
+    job.clamp_security_bounds();
 
     if job.schedule_kind == ScheduleKind::Cron {
         if let Some(ref cron_expr) = job.cron_expr {
@@ -118,7 +137,7 @@ pub async fn list_jobs(
         .collect();
 
     let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(100).min(1000);
+    let limit = clamp_list_limit(query.limit);
     if offset >= filtered.len() {
         filtered.clear();
     } else {
@@ -180,10 +199,17 @@ pub async fn run_now(
 }
 
 /// `GET /jobs/{id}/revisions` — revision history as JSON objects.
+///
+/// Sensitive fields (`changed_by_actor_json`, and `actor_json` / `params_json` inside
+/// `snapshot_json`) are redacted in the HTTP response. Full snapshots remain in the store for
+/// host admin tooling.
 pub async fn get_job_revisions(
     State(state): State<ChrononState>,
     Path(job_id): Path<String>,
 ) -> (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>) {
+    if state.coordinator.get_job(&job_id).await.is_none() {
+        return chronon_err(&ChrononError::JobNotFound(job_id));
+    }
     match state.coordinator.list_revisions(&job_id).await {
         Ok(revisions) => {
             let json_revisions: Vec<serde_json::Value> = revisions
@@ -193,8 +219,8 @@ pub async fn get_job_revisions(
                         "revision_id": r.revision_id,
                         "revision_number": r.revision_number,
                         "changed_at": r.changed_at.to_rfc3339(),
-                        "changed_by_actor_json": r.changed_by_actor_json,
-                        "snapshot_json": r.snapshot_json,
+                        "changed_by_actor_json": serde_json::Value::Null,
+                        "snapshot_json": redact_revision_snapshot(r.snapshot_json),
                     })
                 })
                 .collect();
@@ -204,13 +230,21 @@ pub async fn get_job_revisions(
     }
 }
 
+fn redact_revision_snapshot(mut snapshot: serde_json::Value) -> serde_json::Value {
+    if let Some(obj) = snapshot.as_object_mut() {
+        obj.insert("actor_json".into(), serde_json::Value::Null);
+        obj.insert("params_json".into(), serde_json::Value::Null);
+    }
+    snapshot
+}
+
 /// `GET /runs` — paginated run list with optional filters.
 pub async fn list_runs(
     State(state): State<ChrononState>,
     Query(query): Query<ListRunsQuery>,
 ) -> (StatusCode, Json<ApiResponse<Vec<RunResponse>>>) {
     let offset = query.offset.unwrap_or(0);
-    let limit = query.limit.unwrap_or(100);
+    let limit = clamp_list_limit(query.limit);
     match state
         .coordinator
         .list_runs(
@@ -256,4 +290,22 @@ pub async fn list_scripts(
         })
         .collect();
     Json(ApiResponse::ok(scripts))
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use chronon_core::MAX_LIST_LIMIT;
+
+    use super::clamp_list_limit;
+
+    #[test]
+    fn clamp_list_limit_defaults_and_caps() {
+        assert_eq!(clamp_list_limit(None), 100);
+        assert_eq!(clamp_list_limit(Some(50)), 50);
+        assert_eq!(clamp_list_limit(Some(MAX_LIST_LIMIT)), MAX_LIST_LIMIT);
+        assert_eq!(clamp_list_limit(Some(MAX_LIST_LIMIT + 1)), MAX_LIST_LIMIT);
+        assert_eq!(clamp_list_limit(Some(1_000_000)), MAX_LIST_LIMIT);
+    }
 }

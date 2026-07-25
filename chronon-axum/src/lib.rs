@@ -4,20 +4,31 @@
 //! [`chronon_runtime::CoordinatorService`] and read script metadata from
 //! [`chronon_executor::ScriptRegistry`].
 //!
+//! # Security (host responsibility)
+//!
+//! This router has **no built-in authentication or authorization**. Before exposing it on a
+//! network, wrap it with host middleware (Bearer, mTLS, session) or an authenticated reverse
+//! proxy. See the repository `SECURITY.md` and the `axum_auth_wrap` example.
+//!
+//! On external APIs, replace client-supplied `actor_json` with server-derived identity and use a
+//! fail-closed [`chronon_core::ContextFactory`].
+//!
 //! # Routes
 //!
-//! - `GET/POST /jobs/*` — list, upsert, pause, resume, run now
-//! - `GET /runs/*` — list and fetch runs
+//! - `GET/POST /jobs/*` — list, upsert (by `job_name`), pause, resume, run now
+//! - `GET /runs/*` — list (limit capped at 1000) and fetch runs
 //! - `GET /scripts` — list registered scripts
+//! - `GET /jobs/{id}/revisions` — revision metadata with actor/params redacted
 //!
 //! All responses use the [`ApiResponse`] envelope (`success`, `data`, `error`).
 //! [`UpsertJobRequest::script_name`] must exist in the registry or upsert returns 400.
+//! Concurrency, timeout, and retry knobs are clamped to production ceilings.
 //!
 //! # Mode 3 (remote clients)
 //!
-//! Mount this router on a Mode 1 or Mode 2 coordinator host, then point
+//! Mount this router on a Mode 1 or Mode 2 coordinator host **behind host auth**, then point
 //! [`chronon_runtime::RemoteCoordinatorClient`] at `{base_url}` (paths under
-//! [`API_PREFIX`]). See the `chronon` facade getting-started Mode 3 section.
+//! [`API_PREFIX`]). See the `chronon` crate getting-started Mode 3 section.
 
 mod dto;
 mod handlers;
@@ -44,6 +55,12 @@ pub const API_PREFIX: &str = "/api/chronon";
 ///
 /// Host state `S` must implement [`FromRef<S>`] for [`ChrononState`]. Nest under
 /// [`API_PREFIX`] (`/api/chronon`) so [`chronon_runtime::RemoteCoordinatorClient`] paths match.
+///
+/// **Production:** apply authentication/authorization middleware around the nested router.
+/// Chronon does not enforce auth. See `SECURITY.md` and `axum_auth_wrap`.
+/// The doctest below mounts the router bare (OK for library smoke); production hosts must wrap
+/// with auth — see the `auth_middleware_rejects_without_bearer` integration test and the
+/// `axum_auth_wrap` example.
 ///
 /// # Examples
 ///
@@ -87,6 +104,7 @@ pub const API_PREFIX: &str = "/api/chronon";
 ///     r.register(&ScriptDescriptor::new("demo", noop));
 ///     r
 /// });
+/// // Bare mount for doctest smoke only — wrap with host auth in production.
 /// let app = chronon_router::<AppState>().with_state(AppState {
 ///     chronon: ChrononState::new(coordinator, registry),
 /// });
@@ -98,7 +116,10 @@ pub const API_PREFIX: &str = "/api/chronon";
 /// # }
 /// ```
 ///
-/// Runnable: `cargo run -p uf-chronon --example axum_host --features mem,axum`.
+/// Runnable:
+/// `cargo run -p uf-chronon --example axum_host --features mem,axum`
+/// and
+/// `cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum`.
 pub fn chronon_router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,

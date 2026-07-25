@@ -1,7 +1,7 @@
 //! Redis ready-queue composite over a SQL [`SchedulerStore`](chronon_core::store::SchedulerStore).
 //!
 //! **When to use:** production **Mode 2** (and Mode 1) when you want Postgres durability with a
-//! Redis claim hot path. Enable **`postgres` and `redis`** on the `chronon` facade.
+//! Redis claim hot path. Enable **`postgres` and `redis`** on the `chronon` crate.
 //!
 //! Getting started:
 //! [Mode 1](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary) /
@@ -10,7 +10,7 @@
 //! ## Stack position
 //!
 //! ```text
-//! chronon (facade, `postgres` + `redis` features) → chronon-backend-redis → chronon-backend-{postgres,sql-common} → chronon-core
+//! chronon (public crate, `postgres` + `redis` features) → chronon-backend-redis → chronon-backend-{postgres,sql-common} → chronon-core
 //! ```
 //!
 //! PostgreSQL holds durable admin/history state; Redis sorted sets (`{prefix}:ready:{pool}`)

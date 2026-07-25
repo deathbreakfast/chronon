@@ -49,7 +49,7 @@ if [[ "$USE_LOCAL_COMPOSE" == "1" ]]; then
   done
 fi
 
-echo "=== check (chronon facade) ==="
+echo "=== check (chronon public crate) ==="
 cargo check -p uf-chronon --no-default-features
 cargo check -p uf-chronon --features mem,telemetry-console
 cargo check -p uf-chronon --features mem,telemetry-console,axum

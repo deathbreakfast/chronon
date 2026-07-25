@@ -34,6 +34,10 @@ Generated fleet files (`fleet-state.json`, `instances.env`, `instances.cells.env
 
 ## E2E / CI commands
 
+Durable and AWS runners execute the shared correctness catalog from
+[`chronon-testkit/src/catalog.rs`](../../../chronon-testkit/src/catalog.rs) (including
+`actor_snapshot_toctou`) via the existing matrix macros — no separate scenario list on the fleet.
+
 On the e2e-runner:
 
 ```bash

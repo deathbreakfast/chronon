@@ -20,7 +20,7 @@ use crate::queue::RedisQueueLayer;
 /// SQL persistence with Redis-backed run claim ordering.
 ///
 /// Production Mode 2 store: job/run rows stay in Postgres (or any [`SchedulerStore`]); workers
-/// claim through Redis ZSETs for higher throughput. Requires facade features `postgres` and
+/// claim through Redis ZSETs for higher throughput. Requires public crate features `postgres` and
 /// `redis`. Build with [`Self::new`] after connecting both layers.
 ///
 /// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /

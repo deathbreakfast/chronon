@@ -16,8 +16,20 @@ pub const MATRIX_SLICES: &[&str] = &[
 
 /// All registered benchmark experiment ids (BM-CH* and BM-CHL*).
 pub const ALL_EXPERIMENT_IDS: &[&str] = &[
-    "bm-ch0", "bm-ch1", "bm-ch2", "bm-ch3", "bm-ch4", "bm-ch5", "bm-ch6", "bm-ch7", "bm-ch7d",
-    "bm-ch-retry", "bm-chl0", "bm-chl1", "bm-chl2", "bm-chl3",
+    "bm-ch0",
+    "bm-ch1",
+    "bm-ch2",
+    "bm-ch3",
+    "bm-ch4",
+    "bm-ch5",
+    "bm-ch6",
+    "bm-ch7",
+    "bm-ch7d",
+    "bm-ch-retry",
+    "bm-chl0",
+    "bm-chl1",
+    "bm-chl2",
+    "bm-chl3",
 ];
 
 /// Resolved plan for one benchmark run (id plus default iteration counts).

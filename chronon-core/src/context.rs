@@ -1,9 +1,9 @@
 //! Script execution context ports.
 //!
-//! When a job is scheduled, Chronon stores `actor_json` on the job record. When a worker
-//! dispatches the script, it calls [`ContextFactory::build`] to reconstruct handler context from
-//! that JSON. Script handlers (including those defined with `#[chronon::script]`) receive the
-//! result as `Box<dyn ScriptContext>`.
+//! When a job is scheduled, Chronon stores `actor_json` on the job record and copies it onto
+//! each run at enqueue. When a worker dispatches the script, it calls [`ContextFactory::build`]
+//! with the **run's** snapshotted `actor_json` (not the live job row), so identity cannot change
+//! under a queued run.
 //!
 //! # Choosing a factory
 //!
@@ -13,6 +13,8 @@
 //! | Custom [`ContextFactory`] | Production apps that map actor JSON to sessions, permissions, database access, or other application identity |
 //!
 //! Install the factory at runtime boot on `ChrononBuilder` (see `chronon-runtime`).
+//! On external HTTP APIs, hosts should replace client-supplied `actor_json` with server-derived
+//! identity and implement factories that **fail closed** on untrusted payloads.
 
 use serde_json::Value;
 
@@ -44,23 +46,23 @@ pub trait ScriptContext: Send {
     fn actor_json(&self) -> &Value;
 }
 
-/// Builds a [`ScriptContext`] from JSON captured at schedule time.
+/// Builds a [`ScriptContext`] from JSON captured at enqueue time on the run.
 ///
-/// Install on `ChrononBuilder::context_factory` at boot. The executor calls [`Self::build`] for
-/// every dispatched run using the job's `actor_json`.
+/// Install on `ChrononBuilder::context_factory` at boot. The executor/worker call [`Self::build`]
+/// for every dispatched run using the run's snapshotted `actor_json`.
 ///
 /// | Implementation | When to use |
 /// |----------------|-------------|
 /// | [`JsonScriptContextFactory`] | Examples / handlers that only need label + actor JSON |
 /// | [`NoOpContextFactory`] | Tests and benches |
-/// | Custom | Production identity, sessions, permissions |
+/// | Custom | Production identity, sessions, permissions — prefer **fail closed** on invalid payloads |
 ///
 /// # Examples
 ///
 /// Custom factory sketch:
 ///
 /// ```
-/// use chronon_core::{ContextFactory, Result, ScriptContext};
+/// use chronon_core::{ContextFactory, ChrononError, Result, ScriptContext};
 /// use serde_json::Value;
 ///
 /// struct AppCtx { label: String, actor_json: Value }
@@ -72,8 +74,11 @@ pub trait ScriptContext: Send {
 /// struct AppFactory;
 /// impl ContextFactory for AppFactory {
 ///     fn build(&self, actor_json: &Value) -> Result<Box<dyn ScriptContext>> {
+///         let Some(user) = actor_json.get("user").and_then(|v| v.as_str()) else {
+///             return Err(ChrononError::Identity("missing user".into()));
+///         };
 ///         Ok(Box::new(AppCtx {
-///             label: actor_json.get("user").and_then(|v| v.as_str()).unwrap_or("anon").into(),
+///             label: user.into(),
 ///             actor_json: actor_json.clone(),
 ///         }))
 ///     }
@@ -81,12 +86,16 @@ pub trait ScriptContext: Send {
 ///
 /// let ctx = AppFactory.build(&serde_json::json!({"user": "bob"})).unwrap();
 /// assert_eq!(ctx.label(), "bob");
+/// assert!(AppFactory.build(&serde_json::json!({})).is_err());
 /// ```
 pub trait ContextFactory: Send + Sync {
-    /// Reconstruct handler context from actor JSON stored on the job.
+    /// Reconstruct handler context from actor JSON snapshotted on the run at enqueue.
+    ///
+    /// # Errors
     ///
     /// Returns [`IdentityError`] (mapped to [`ChrononError::Identity`]) when the payload
-    /// cannot be decoded into application identity.
+    /// cannot be decoded into application identity. Hosts should fail closed on untrusted
+    /// or incomplete payloads.
     fn build(&self, actor_json: &Value) -> Result<Box<dyn ScriptContext>>;
 }
 

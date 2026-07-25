@@ -215,6 +215,6 @@ pub struct ListRunsQuery {
     pub status: Option<String>,
     /// Pagination offset; defaults to 0 in handlers.
     pub offset: Option<usize>,
-    /// Page size; defaults to 100 in handlers.
+    /// Page size; defaults to 100, capped at [`chronon_core::MAX_LIST_LIMIT`] (1000).
     pub limit: Option<usize>,
 }

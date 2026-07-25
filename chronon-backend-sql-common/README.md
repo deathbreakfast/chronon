@@ -2,9 +2,7 @@
 
 Shared SQL [`SchedulerStore`](https://docs.rs/chronon-core/latest/chronon_core/trait.SchedulerStore.html) for PostgreSQL and SQLite.
 
-## Audience
-
-**Adapter authors** extending SQL persistence. Application integrators should use the thin wrappers:
+Adapter authors extending SQL persistence should use this crate. Application integrators should use the thin wrappers:
 
 - [`chronon-backend-postgres`](../chronon-backend-postgres/README.md)
 - [`chronon-backend-sqlite`](../chronon-backend-sqlite/README.md)
@@ -22,6 +20,7 @@ chronon-backend-{postgres,sqlite} → chronon-backend-sql-common → chronon-cor
 | [`SqlSchedulerStore`] | Connect, schema bootstrap, full port implementation |
 | [`SqlDialect`] / [`SqlPool`] | Engine selection |
 | [`bind_sql`] | Rewrite `?` placeholders to `$1`, … for Postgres |
+| [`validate_postgres_schema_name`] | Allowlist for isolated schema DDL / `search_path` / drop |
 | [`delegate_scheduler_store!`] | Macro for thin wrapper crates |
 
 ## When to depend directly
@@ -29,7 +28,7 @@ chronon-backend-{postgres,sqlite} → chronon-backend-sql-common → chronon-cor
 - Building a new SQL dialect wrapper (mirror postgres/sqlite crates)
 - Contributing to the shared schema or query modules
 
-Do **not** depend on this crate from application binaries — use the facade features (`sqlite`, `postgres`).
+Do **not** depend on this crate from application binaries — use the public crate features (`sqlite`, `postgres`).
 
 ## Schema
 

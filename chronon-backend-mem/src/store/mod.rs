@@ -24,7 +24,7 @@ pub const LEADER_ROW_ID: &str = "singleton";
 /// examples, and benchmarks. Do **not** share across processes; use SQLite or Postgres for
 /// durable / Mode 2 topologies.
 ///
-/// Enable the facade `mem` feature to re-export this type from `chronon`. Wire with
+/// Enable the public crate `mem` feature to re-export this type from `chronon`. Wire with
 /// `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new()))` or
 /// [`crate::install_default_mem_store`].
 ///

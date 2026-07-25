@@ -121,7 +121,7 @@ Your application owns identity policy, routing, and business logic. Chronon owns
 cargo run -p uf-chronon --example script_macro --features mem
 ```
 
-Enable features explicitly — the facade ships with **no default features** (`default = []`). See [Cargo features](#cargo-features) below.
+Enable features explicitly — the public crate ships with **no default features** (`default = []`). See [Cargo features](#cargo-features) below.
 
 ### Durable storage (SQLite)
 
@@ -147,7 +147,7 @@ API details: [`chronon/README.md`](chronon/README.md) and `cargo doc -p uf-chron
 | `sqlite` | `SqliteSchedulerStore` | Ready — embedded file-backed, PR CI |
 | `postgres` | `PostgresSchedulerStore` | Ready — shared durable production |
 | `redis` | `PostgresRedisSchedulerStore` | Ready — Postgres + Redis claim overlay (**requires `postgres`**) |
-| `axum` | HTTP API router | Ready — mount on host Axum server |
+| `axum` | HTTP API router | Ready — mount on host Axum server (**host must authenticate**; see [`SECURITY.md`](SECURITY.md)) |
 | `telemetry-console` | Console telemetry sink | Optional marker |
 | *(none)* | Port + DTOs + builder only | `default-features = false` |
 
@@ -182,7 +182,7 @@ Selected via **`ChrononBuilder`** — not a global mode enum:
 
 | Crate | Role |
 |-------|------|
-| `chronon` | Public facade (re-exports) |
+| `chronon` | Public crate (re-exports) |
 | `chronon-core` | Port, DTOs, router, identity ports |
 | `chronon-telemetry` | `TelemetrySink`, console instrumentation |
 | `chronon-backend-mem` | In-memory `SchedulerStore` |

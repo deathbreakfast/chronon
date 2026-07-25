@@ -47,7 +47,8 @@ pub use error::{ChrononError, Result};
 pub use handle::ScriptHandle;
 pub use models::{
     Job, JobRevision, Lease, MisfirePolicy, PartitionAssignment, RetryPolicy, Run, RunStatus,
-    ScheduleKind, SchedulerLeader, Script, Worker, WorkerStatus,
+    ScheduleKind, SchedulerLeader, Script, Worker, WorkerStatus, MAX_JOB_CONCURRENCY,
+    MAX_LIST_LIMIT, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS, MAX_TIMEOUT_MS,
 };
 pub use router::{default_store_from_global, StoreRouter, DEFAULT_STORE_NAME};
 pub use store::SchedulerStore;

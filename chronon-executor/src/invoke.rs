@@ -89,10 +89,10 @@ pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> ExecuteScriptOutco
     let capture = ChrononLogCapture::new(DEFAULT_MAX_CAPTURE_BYTES);
     let subscriber = Registry::default().with(capture.clone());
     let dispatch = tracing::dispatcher::Dispatch::new(subscriber);
-    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let guard = tracing::dispatcher::set_default(&dispatch);
     let scope = capture.enter();
 
-    let result = invoke_inner(
+    let result = invoke_inner(ExecuteScriptRequest {
         registry,
         context_factory,
         telemetry,
@@ -101,11 +101,11 @@ pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> ExecuteScriptOutco
         params_json,
         job_name,
         run_id,
-    )
+    })
     .await;
 
     let mut logs = scope.finish();
-    drop(_guard);
+    drop(guard);
 
     if let Err(ref e) = result {
         logs.ensure_stderr_message(&e.to_string());
@@ -115,14 +115,16 @@ pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> ExecuteScriptOutco
 }
 
 async fn invoke_inner(
-    registry: &ScriptRegistry,
-    context_factory: &Arc<dyn ContextFactory>,
-    telemetry: &Arc<dyn TelemetrySink>,
-    script_name: &str,
-    actor_json: &Value,
-    params_json: Value,
-    job_name: &str,
-    run_id: &str,
+    ExecuteScriptRequest {
+        registry,
+        context_factory,
+        telemetry,
+        script_name,
+        actor_json,
+        params_json,
+        job_name,
+        run_id,
+    }: ExecuteScriptRequest<'_>,
 ) -> Result<()> {
     let descriptor = registry.get_or_err(script_name).inspect_err(|e| {
         record_executor_error(

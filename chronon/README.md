@@ -1,6 +1,6 @@
-# chronon (facade)
+# chronon (public crate)
 
-Public facade re-exporting split upstream crates.
+Public crate re-exporting split upstream crates.
 
 ## Cargo features
 

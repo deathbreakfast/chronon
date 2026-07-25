@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Public facade for Chronon cron and run-once scheduler"
+description = "Public crate for Chronon cron and run-once scheduler"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/uf-chronon"
@@ -82,6 +82,10 @@ required-features = ["mem"]
 
 [[example]]
 name = "axum_host"
+required-features = ["mem", "axum"]
+
+[[example]]
+name = "axum_auth_wrap"
 required-features = ["mem", "axum"]
 
 [[example]]

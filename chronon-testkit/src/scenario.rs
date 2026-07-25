@@ -144,6 +144,20 @@ pub enum ScenarioStep {
         /// Minimum invocation count.
         min: u32,
     },
+    /// Overwrite a job's live `actor_json` without bumping revision (TOCTOU setup).
+    MutateJobActorJson {
+        /// Job name to mutate.
+        job_name: String,
+        /// New actor JSON written to the live job row.
+        actor_json: serde_json::Value,
+    },
+    /// Assert the latest run for a job still holds the snapshotted `actor_json`.
+    AssertLatestRunActorJson {
+        /// Job name whose latest run is inspected.
+        job_name: String,
+        /// Expected run `actor_json`.
+        expected: serde_json::Value,
+    },
 }
 
 /// Ordered scenario consumed by both e2e and bench drivers.
@@ -456,6 +470,46 @@ impl ScenarioSpec {
                     job_name: "timeout-job".into(),
                     status: RunStatus::Success,
                     timeout_ms: 300,
+                },
+                ScenarioStep::ShutdownEmbedded,
+            ],
+        }
+    }
+
+    /// Enqueued run keeps snapshotted actor even if the live job is mutated before execute.
+    pub fn actor_snapshot_toctou() -> Self {
+        let enqueued = serde_json::json!({ "kind": "enqueued" });
+        let mutated = serde_json::json!({ "kind": "live-mutated" });
+        Self {
+            id: "actor-snapshot-toctou".into(),
+            steps: vec![
+                ScenarioStep::RegisterScript {
+                    probe: ScriptProbeKind::Noop,
+                },
+                ScenarioStep::UpsertManualJob {
+                    job_name: "actor-toctou".into(),
+                    script_name: crate::fixtures::NOOP_SCRIPT.into(),
+                },
+                ScenarioStep::MutateJobActorJson {
+                    job_name: "actor-toctou".into(),
+                    actor_json: enqueued.clone(),
+                },
+                ScenarioStep::RunNow {
+                    job_name: "actor-toctou".into(),
+                },
+                ScenarioStep::MutateJobActorJson {
+                    job_name: "actor-toctou".into(),
+                    actor_json: mutated,
+                },
+                ScenarioStep::SpawnEmbedded,
+                ScenarioStep::WaitRunTerminal {
+                    job_name: "actor-toctou".into(),
+                    status: RunStatus::Success,
+                    timeout_ms: 5_000,
+                },
+                ScenarioStep::AssertLatestRunActorJson {
+                    job_name: "actor-toctou".into(),
+                    expected: enqueued,
                 },
                 ScenarioStep::ShutdownEmbedded,
             ],

@@ -28,6 +28,7 @@ macro_rules! invoke_catalog_scenario_ids {
             job_revisions_smoke,
             counting_exactly_once,
             wait_run_timeout,
+            actor_snapshot_toctou,
         );
     };
 }
@@ -164,12 +165,18 @@ macro_rules! catalog_entries {
                 $deployment,
                 ScenarioSpec::wait_run_timeout,
             ),
+            entry(
+                "actor_snapshot_toctou",
+                PathKind::Happy,
+                $deployment,
+                ScenarioSpec::actor_snapshot_toctou,
+            ),
         ]
     };
 }
 
 /// Full embedded deployment catalog (PR CI default).
-static EMBEDDED_CATALOG: [CatalogEntry; 13] = catalog_entries!(CatalogDeployment::Embedded);
+static EMBEDDED_CATALOG: [CatalogEntry; 14] = catalog_entries!(CatalogDeployment::Embedded);
 
 /// Embedded deployment catalog slice.
 #[must_use]
@@ -178,7 +185,7 @@ pub fn embedded_catalog() -> &'static [CatalogEntry] {
 }
 
 /// Coordinator–worker split deployment catalog (full parity with embedded).
-static COORDINATOR_CATALOG: [CatalogEntry; 13] =
+static COORDINATOR_CATALOG: [CatalogEntry; 14] =
     catalog_entries!(CatalogDeployment::CoordinatorWorker);
 
 /// Coordinator–worker deployment catalog slice.

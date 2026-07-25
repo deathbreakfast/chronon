@@ -11,7 +11,7 @@
 //! ## Stack position
 //!
 //! ```text
-//! chronon (facade, `postgres` feature) → chronon-backend-postgres → chronon-backend-sql-common → chronon-core
+//! chronon (public crate, `postgres` feature) → chronon-backend-postgres → chronon-backend-sql-common → chronon-core
 //! ```
 //!
 //! ## Entry points
@@ -101,7 +101,7 @@ pub use bootstrap::{postgres_store_from_env, postgres_test_url};
 /// [worker](index.html#mode-2--worker-binary).
 ///
 /// For higher claim throughput, wrap with `PostgresRedisSchedulerStore` from
-/// `chronon-backend-redis` (`postgres` + `redis` features). Enable the facade `postgres`
+/// `chronon-backend-redis` (`postgres` + `redis` features). Enable the public crate `postgres`
 /// feature to re-export this type.
 ///
 /// # Examples
@@ -151,6 +151,9 @@ impl PostgresSchedulerStore {
 
     /// Connect with an isolated schema (for parallel tests).
     ///
+    /// `schema` must be an allowlisted identifier (`^[A-Za-z_][A-Za-z0-9_]*$`, max 63 chars)
+    /// or connect fails with [`chronon_core::ChrononError::ParamError`] before any DDL.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -168,7 +171,8 @@ impl PostgresSchedulerStore {
     ///
     /// # Errors
     ///
-    /// Returns a storage error when schema creation, pool connect, or bootstrap fails.
+    /// Returns a parameter error for invalid schema names, or a storage error when schema
+    /// creation, pool connect, or bootstrap fails.
     pub async fn connect_isolated(url: &str, schema: &str) -> Result<Self> {
         let inner = SqlSchedulerStore::connect_postgres_isolated(url, schema).await?;
         Ok(Self { inner })

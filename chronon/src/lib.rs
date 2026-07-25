@@ -11,12 +11,19 @@
 //! - **Typed scripts** — `#[chronon::script]` registers handlers with inventory; params stay typed.
 //! - **Durable jobs and runs** — schedule config, revisions, and execution history on
 //!   [`SchedulerStore`](chronon_core::SchedulerStore).
+//! - **Upsert-by-name** — HTTP/job upsert preserves `job_id` when `job_name` already exists and
+//!   bumps revision (see Mode 3 / axum handlers).
+//! - **Security bounds** — list pagination and policy knobs clamp to
+//!   [`MAX_LIST_LIMIT`](chronon_core::MAX_LIST_LIMIT) / related ceilings.
+//! - **Revision redaction** — HTTP revision responses omit actor/params; store keeps full snapshots.
+//! - **Schema allowlist** — isolated Postgres schema names must match
+//!   `validate_postgres_schema_name` in `chronon-backend-sql-common`.
 //! - **Composable storage** — in-memory, SQLite, PostgreSQL, or Postgres + Redis claim overlay.
 //! - **Embedded or split topology** — one process, or coordinator / worker / remote HTTP client
 //!   (see [Choose a topology](#choose-a-topology)).
 //! - **Host identity** — [`ContextFactory`](chronon_core::ContextFactory) rebuilds run-time
-//!   context from stored JSON.
-//! - **Optional HTTP API** — mount [`chronon_router`] (`axum` feature).
+//!   context from the **run** `actor_json` snapshot.
+//! - **Optional HTTP API** — mount [`chronon_router`] (`axum` feature); hosts must wrap with auth.
 //!
 //! *Cron and run-once scheduling without locking you into one database or a full workflow engine.*
 //!
@@ -169,8 +176,9 @@
 //!                                                    └── Mode 1 or Mode 2 coordinator + store
 //! ```
 //!
-//! **API host** — nest the router under [`API_PREFIX`] (`/api/chronon`). Sketch:
-//! `axum_host` (`mem,axum`).
+//! **API host** — nest the router under [`API_PREFIX`] (`/api/chronon`) **behind host
+//! authentication** (Chronon does not authenticate these routes). Sketches:
+//! `axum_host` (`mem,axum`), `axum_auth_wrap` (Tower Bearer demo). See repository `SECURITY.md`.
 //!
 //! **App binary** — build a [`Job`](chronon_core::Job) from your [`ScriptHandle`], then call
 //! [`RemoteCoordinatorClient`] (do not call [`Chronon::run`]):
@@ -264,7 +272,7 @@
 //! # Notes
 //!
 //! - **No default Cargo features** — enable `mem`, `sqlite`, `postgres`, `redis`, and/or `axum`
-//!   explicitly. Document the facade with `--all-features` so rustdoc links resolve.
+//!   explicitly. Document the public crate with `--all-features` so rustdoc links resolve.
 //! - **Mode 2 scripts live on workers** — inventory must be linked into the binary that calls
 //!   `.worker(...)`; the coordinator ticks but does not execute handlers.
 //! - **Call `scheduler.init_partitions().await` before [`Chronon::run`]** on embedded and
@@ -276,7 +284,18 @@
 //! # Architecture
 //!
 //! Your application owns identity policy and business logic. Chronon owns scheduling semantics:
-//! due queries, claiming, cron evaluation, and script dispatch.
+//! due queries, claiming, cron evaluation, and script dispatch. Production trust boundaries
+//! (HTTP auth, store credentials, fail-closed [`ContextFactory`](chronon_core::ContextFactory),
+//! list/policy clamps, revision redaction, schema allowlisting) are documented in the repository
+//! `SECURITY.md`.
+//!
+//! | Concern | Where |
+//! |---------|--------|
+//! | Upsert-by-name | Axum upsert + `get_job_by_name` |
+//! | Actor snapshot at execute | Runtime worker / `Executor::spawn_run` use run `actor_json` |
+//! | List / policy bounds | `MAX_*` + `Job::clamp_security_bounds` / handler `.min(MAX_LIST_LIMIT)` |
+//! | Revision HTTP redaction | Axum revision handlers |
+//! | Postgres schema allowlist | `validate_postgres_schema_name` in sql-common |
 //!
 //! ```text
 //! Your app / worker binary
@@ -324,7 +343,7 @@
 //! | `sqlite` | [`SqliteSchedulerStore`] | Ready — embedded file-backed |
 //! | `postgres` | [`PostgresSchedulerStore`] | Ready — shared durable |
 //! | `redis` | [`PostgresRedisSchedulerStore`] | Ready — Postgres + Redis claim overlay (**requires `postgres`**) |
-//! | `axum` | [`chronon_router`], HTTP DTOs | Ready — mount on host Axum server |
+//! | `axum` | [`chronon_router`], HTTP DTOs | Ready — mount on host Axum server (**host must authenticate**) |
 //! | `telemetry-console` | Documents `ConsoleSink` usage | Optional marker (`ConsoleSink` always re-exported) |
 //!
 //! # Runnable examples
@@ -340,6 +359,7 @@
 //! | `postgres_boot` | Mode 1 | `postgres` |
 //! | `postgres_redis_boot` | Mode 1 | `postgres,redis` |
 //! | `axum_host` | Mode 1 + HTTP | `mem,axum` |
+//! | `axum_auth_wrap` | Mode 1 + HTTP + host auth demo | `mem,axum` |
 //! | `coordinator_daemon` | Mode 2 coordinator | `postgres,redis` |
 //! | `worker_daemon` | Mode 2 worker | `postgres,redis` |
 //!
@@ -357,7 +377,7 @@ pub mod prelude {
     //!
     //! One-import surface for models, runtime boot, scheduler, executor, and the [`script`] macro.
     //! Prefer `use chronon::prelude::*;` in worker binaries and integration tests rather than
-    //! importing internal crates directly. For durable storage wiring, also enable facade features
+    //! importing internal crates directly. For durable storage wiring, also enable public crate features
     //! (`sqlite`, `postgres`, `redis`) and construct the matching [`SchedulerStore`] adapter.
 
     pub use crate::script;

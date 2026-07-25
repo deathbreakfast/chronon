@@ -4,6 +4,8 @@ Pre-registered workloads and runner commands: [`EXPERIMENTS.md`](EXPERIMENTS.md)
 
 Decision-grade numbers use AWS hardware profiles only (`aws-t3.medium`, `aws-c6i.large`, scaling-fleet). Harness smoke on developer machines is non-authoritative.
 
+**Out of scope for decision-grade BM-CH tables:** security hardening correctness (upsert-by-name, actor snapshot, API/policy bounds, schema allowlist, revision redaction, executor event transitions). Those are gated by unit/integration/e2e tests — see [`EXPERIMENTS.md`](EXPERIMENTS.md#non-benchmark-correctness-security-hardening).
+
 ---
 
 ## Executive summary

@@ -12,7 +12,10 @@ mod scheduler_leader;
 mod script;
 mod worker;
 
-pub use job::{Job, MisfirePolicy, RetryPolicy, ScheduleKind};
+pub use job::{
+    Job, MisfirePolicy, RetryPolicy, ScheduleKind, MAX_JOB_CONCURRENCY, MAX_LIST_LIMIT,
+    MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS, MAX_TIMEOUT_MS,
+};
 pub use lease::Lease;
 pub use partition_assignment::PartitionAssignment;
 pub use revision::JobRevision;

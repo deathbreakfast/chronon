@@ -11,7 +11,7 @@
 //! ## Stack position
 //!
 //! ```text
-//! chronon (facade, `sqlite` feature) → chronon-backend-sqlite → chronon-backend-sql-common → chronon-core
+//! chronon (public crate, `sqlite` feature) → chronon-backend-sqlite → chronon-backend-sql-common → chronon-core
 //! ```
 //!
 //! ## Entry points
@@ -100,7 +100,7 @@ use sqlx::SqlitePool;
 /// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /
 /// [worker](index.html#mode-2--worker-binary).
 ///
-/// Enable the facade `sqlite` feature. Construct with [`Self::new`] (file path) or
+/// Enable the public crate `sqlite` feature. Construct with [`Self::new`] (file path) or
 /// [`Self::connect`] (URL, including `sqlite://:memory:`).
 ///
 /// # Examples

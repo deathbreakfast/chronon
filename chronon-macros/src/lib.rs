@@ -41,7 +41,7 @@ mod script_validate;
 ///
 /// Boot with `ChrononBuilder::auto_registry()` so inventory discovers the handler. In Mode 2,
 /// link scripts into **worker** binaries. Prefer `chronon_core::ScriptHandle` for typed job
-/// defaults; see the `chronon` facade getting-started §4–5.
+/// defaults; see the `chronon` crate getting-started §4–5.
 ///
 /// # Examples
 ///

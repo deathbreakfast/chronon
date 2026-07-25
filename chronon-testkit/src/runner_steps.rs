@@ -85,6 +85,18 @@ pub(super) async fn run_mutation_step(
         }
         ScenarioStep::SpawnEmbedded => session.spawn_embedded().await?,
         ScenarioStep::ShutdownEmbedded => session.shutdown_embedded().await?,
+        ScenarioStep::MutateJobActorJson {
+            job_name,
+            actor_json,
+        } => {
+            let store = session.store_dyn()?;
+            let mut job = store
+                .get_job_by_name(job_name)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("job {job_name} not found"))?;
+            job.actor_json = actor_json.clone();
+            store.upsert_job(&job).await?;
+        }
         ScenarioStep::WaitRunTerminal {
             job_name,
             status,
@@ -173,6 +185,21 @@ pub(super) async fn run_assertion_step(
                 bail!("expected counting probe >= {min}, got {total}");
             }
         }
+        ScenarioStep::AssertLatestRunActorJson { job_name, expected } => {
+            let store = session.store_dyn()?;
+            let job = store
+                .get_job_by_name(job_name)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("job {job_name} not found"))?;
+            let runs = store.list_runs_for_job(&job.job_id, 10).await?;
+            let run = runs
+                .into_iter()
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("no runs for {job_name}"))?;
+            if &run.actor_json != expected {
+                bail!("expected run actor_json {expected}, got {}", run.actor_json);
+            }
+        }
         _ => bail!("unexpected step in assertion dispatch"),
     }
     Ok(())
@@ -188,6 +215,7 @@ pub(super) fn is_assertion_step(step: &ScenarioStep) -> bool {
             | ScenarioStep::AssertRevisionCount { .. }
             | ScenarioStep::AssertJobNotDue { .. }
             | ScenarioStep::AssertCountingProbe { .. }
+            | ScenarioStep::AssertLatestRunActorJson { .. }
     )
 }
 

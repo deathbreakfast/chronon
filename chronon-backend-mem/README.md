@@ -30,7 +30,7 @@ let _store = install_default_mem_store();
 let resolved = default_store_from_global()?;
 ```
 
-## Facade feature
+## Cargo feature
 
 Enable via `chronon` crate feature `mem`.
 

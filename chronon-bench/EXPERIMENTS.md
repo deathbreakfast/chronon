@@ -6,6 +6,19 @@ Pre-registered experiment IDs, dimension matrix, sweep phases, results log, and 
 
 This registry defines **BM-CH\*** (Chronon layer) and **BM-CHL\*** (sustained tick load). Decision-grade hardware is AWS-only.
 
+## Non-benchmark correctness (security hardening)
+
+The following are validated via **unit / axum integration** tests and the
+`actor_snapshot_toctou` e2e catalog scenario — **not** BM-CH experiments:
+
+- HTTP upsert-by-`job_name`, list pagination caps, policy clamps
+- Run `actor_json` snapshot at execute (TOCTOU fix; executor unit + catalog scenario)
+- Postgres schema identifier allowlist
+- HTTP revision redaction
+- Executor lifecycle event transition guards
+
+Do not invent BM-CH IDs for these unless you need decision-grade **overhead** numbers on AWS; capacity gates remain BM-CH0–CH7 / BM-CH-RETRY.
+
 ---
 
 ## Validation status

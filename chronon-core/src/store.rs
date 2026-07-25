@@ -14,7 +14,7 @@ use crate::models::{
 /// HTTP API call these methods; implementations must be `Send + Sync` for shared use across
 /// Tokio tasks.
 ///
-/// | Adapter | Facade feature | Topology fit |
+/// | Adapter | Public crate feature | Topology fit |
 /// |---------|----------------|--------------|
 /// | `InMemorySchedulerStore` | `mem` | Mode 1 local / tests (not multi-process) |
 /// | `SqliteSchedulerStore` | `sqlite` | Mode 1 single-host durable |

@@ -76,7 +76,8 @@ pub enum ExecutorEvent {
 pub struct Executor {
     /// Script catalog used to resolve handler functions by name.
     pub registry: Arc<ScriptRegistry>,
-    /// Rebuilds [`ScriptContext`](chronon_core::ScriptContext) from job `actor_json`.
+    /// Rebuilds [`ScriptContext`](chronon_core::ScriptContext) from the **run** snapshot's
+    /// `actor_json` (see [`Self::spawn_run`]), not the live job row.
     pub context_factory: Arc<dyn ContextFactory>,
     /// Metrics and structured error events for invoke phases.
     pub telemetry: Arc<dyn TelemetrySink>,
@@ -117,7 +118,8 @@ impl Executor {
     /// Spawn asynchronous execution for one run of the given job.
     ///
     /// Emits [`ExecutorEvent::RunStarted`] immediately, then invokes the script via
-    /// [`execute_script`]. Run `params_json` takes precedence over job defaults.
+    /// [`execute_script`]. Uses the run's snapshotted `actor_json` and `params_json`
+    /// (not the live job row) so queued identity cannot change under a worker.
     pub fn spawn_run(&self, job: &Job, run: Run) {
         let registry = Arc::clone(&self.registry);
         let context_factory = Arc::clone(&self.context_factory);
@@ -127,7 +129,7 @@ impl Executor {
         let script_name = job.script_name.clone();
         let job_name = job.job_name.clone();
         let params_json = run.params_json.clone();
-        let actor_json = job.actor_json.clone();
+        let actor_json = run.actor_json.clone();
         let run_id = run.run_id;
 
         let span = tracing::info_span!(
@@ -217,6 +219,7 @@ mod tests {
     use std::sync::Mutex;
 
     static LAST_PARAMS: Mutex<Option<Value>> = Mutex::new(None);
+    static LAST_ACTOR: Mutex<Option<Value>> = Mutex::new(None);
 
     fn param_probe(
         _ctx: Box<dyn ScriptContext>,
@@ -226,6 +229,40 @@ mod tests {
             *LAST_PARAMS.lock().unwrap() = Some(params);
             Ok(())
         })
+    }
+
+    fn actor_probe(
+        ctx: Box<dyn ScriptContext>,
+        _params: Value,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+        Box::pin(async move {
+            *LAST_ACTOR.lock().unwrap() = Some(ctx.actor_json().clone());
+            Ok(())
+        })
+    }
+
+    struct RecordingFactory;
+
+    impl chronon_core::ContextFactory for RecordingFactory {
+        fn build(&self, actor_json: &Value) -> Result<Box<dyn ScriptContext>> {
+            Ok(Box::new(RecordingCtx {
+                actor_json: actor_json.clone(),
+            }))
+        }
+    }
+
+    struct RecordingCtx {
+        actor_json: Value,
+    }
+
+    impl ScriptContext for RecordingCtx {
+        fn label(&self) -> &'static str {
+            "recording"
+        }
+
+        fn actor_json(&self) -> &Value {
+            &self.actor_json
+        }
     }
 
     #[tokio::test]
@@ -259,6 +296,40 @@ mod tests {
         assert_eq!(
             *LAST_PARAMS.lock().unwrap(),
             Some(json!({ "source": "run" }))
+        );
+    }
+
+    #[tokio::test]
+    async fn spawn_run_uses_run_actor_json_not_live_job() {
+        *LAST_ACTOR.lock().unwrap() = None;
+        let registry = Arc::new({
+            let mut r = ScriptRegistry::new();
+            r.register(&ScriptDescriptor::new("actor_probe", actor_probe));
+            r
+        });
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let executor = Executor::new(
+            registry,
+            Arc::new(RecordingFactory),
+            Arc::new(chronon_telemetry::NoOpSink),
+            tx,
+        );
+
+        let mut job = Job::new("job", "actor_probe");
+        job.actor_json = json!({ "user": "elevated" });
+        let mut run = chronon_core::Run::for_job(&job.job_id, "actor_probe", Utc::now());
+        run.actor_json = json!({ "user": "snapshotted" });
+
+        executor.spawn_run(&job, run);
+
+        for _ in 0..20 {
+            if let Some(ExecutorEvent::RunCompleted { .. }) = rx.recv().await {
+                break;
+            }
+        }
+        assert_eq!(
+            *LAST_ACTOR.lock().unwrap(),
+            Some(json!({ "user": "snapshotted" }))
         );
     }
 }

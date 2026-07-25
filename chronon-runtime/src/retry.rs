@@ -222,7 +222,11 @@ mod tests {
         finalize_failed_run(&store, run, &job, RunStatus::Failed, "x", None).await;
 
         assert_eq!(
-            store.list_runs_for_job(&job.job_id, 10).await.unwrap().len(),
+            store
+                .list_runs_for_job(&job.job_id, 10)
+                .await
+                .unwrap()
+                .len(),
             1
         );
     }

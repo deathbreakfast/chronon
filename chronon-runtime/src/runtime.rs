@@ -51,7 +51,7 @@ pub struct Chronon {
     pub scheduler: Arc<Scheduler>,
     /// Script registry and async dispatch.
     pub executor: Arc<Executor>,
-    /// Job/run CRUD facade over [`Self::store`].
+    /// Job/run CRUD API over [`Self::store`].
     pub coordinator: CoordinatorService,
     /// Deployment shape selected at build time.
     pub deployment: DeploymentShape,

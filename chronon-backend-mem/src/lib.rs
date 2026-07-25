@@ -4,7 +4,7 @@
 //! e2e, and benchmarks — **not** for multi-process Mode 2 clusters (`mem` does not cross
 //! process boundaries).
 //!
-//! Getting started on the facade:
+//! Getting started on the public crate:
 //! [Mode 1 — Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary).
 //!
 //! ## Entry points
@@ -12,12 +12,12 @@
 //! - [`InMemorySchedulerStore::new`] — create a standalone store
 //! - [`install_default_mem_store`] — register as the process-global default on [`StoreRouter`]
 //!
-//! Enable the `mem` feature on the `chronon` facade to re-export these types.
+//! Enable the `mem` feature on the `chronon` crate to re-export these types.
 //!
 //! ## Mode 1 — Embedded
 //!
 //! Wire with `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new())).embedded()`
-//! on the `chronon` facade (`mem` feature).
+//! on the `chronon` crate (`mem` feature).
 //!
 //! ```ignore
 //! use std::sync::Arc;

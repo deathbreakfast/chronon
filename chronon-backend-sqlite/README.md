@@ -36,7 +36,7 @@ Runnable example: `cargo run -p uf-chronon --example sqlite_boot --features sqli
 
 Schema bootstrap runs automatically on connect.
 
-## Facade feature
+## Cargo feature
 
 ```toml
 chronon = { git = "...", default-features = false, features = ["sqlite"] }

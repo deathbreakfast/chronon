@@ -104,10 +104,7 @@ async fn failed_run_persists_stderr_logs() {
         .find(|r| r.status == RunStatus::Failed)
         .expect("failed run");
     assert!(
-        failed
-            .stderr_text
-            .as_deref()
-            .is_some_and(|s| !s.is_empty()),
+        failed.stderr_text.as_deref().is_some_and(|s| !s.is_empty()),
         "stderr_text empty on failed run"
     );
 

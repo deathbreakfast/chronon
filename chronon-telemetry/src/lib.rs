@@ -38,9 +38,7 @@ mod noop;
 mod recording;
 
 pub use console::ConsoleSink;
-pub use log_capture::{
-    CaptureScope, CapturedLogs, ChrononLogCapture, DEFAULT_MAX_CAPTURE_BYTES,
-};
+pub use log_capture::{CaptureScope, CapturedLogs, ChrononLogCapture, DEFAULT_MAX_CAPTURE_BYTES};
 pub use noop::NoOpSink;
 pub use recording::{RecordedCounter, RecordedEvent, RecordedGauge, RecordingSink};
 
