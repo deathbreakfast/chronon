@@ -93,7 +93,23 @@ name = "sqlite_boot"
 required-features = ["sqlite"]
 
 [[example]]
+name = "sqlite_coordinator_daemon"
+required-features = ["sqlite"]
+
+[[example]]
+name = "sqlite_worker_daemon"
+required-features = ["sqlite"]
+
+[[example]]
 name = "postgres_boot"
+required-features = ["postgres"]
+
+[[example]]
+name = "postgres_coordinator_daemon"
+required-features = ["postgres"]
+
+[[example]]
+name = "postgres_worker_daemon"
 required-features = ["postgres"]
 
 [[example]]

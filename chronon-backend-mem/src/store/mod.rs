@@ -20,9 +20,9 @@ pub const LEADER_ROW_ID: &str = "singleton";
 
 /// Thread-safe in-memory persistence for jobs, runs, and coordinator metadata.
 ///
-/// Process-local and **non-durable** — suitable for Mode 1 embedded experiments, unit tests,
+/// Process-local and **non-durable** — suitable for embedded experiments, unit tests,
 /// examples, and benchmarks. Do **not** share across processes; use SQLite or Postgres for
-/// durable / Mode 2 topologies.
+/// durable / coordinator–worker topologies.
 ///
 /// Enable the public crate `mem` feature to re-export this type from `chronon`. Wire with
 /// `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new()))` or

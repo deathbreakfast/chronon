@@ -24,11 +24,11 @@
 //! [`UpsertJobRequest::script_name`] must exist in the registry or upsert returns 400.
 //! Concurrency, timeout, and retry knobs are clamped to production ceilings.
 //!
-//! # Mode 3 (remote clients)
+//! # Remote HTTP clients
 //!
-//! Mount this router on a Mode 1 or Mode 2 coordinator host **behind host auth**, then point
+//! Mount this router on an embedded or coordinator–worker host **behind host auth**, then point
 //! [`chronon_runtime::RemoteCoordinatorClient`] at `{base_url}` (paths under
-//! [`API_PREFIX`]). See the `chronon` crate getting-started Mode 3 section.
+//! [`API_PREFIX`]). See the `chronon` crate [Remote HTTP client](https://docs.rs/uf-chronon/latest/chronon/index.html#remote-http-client) section.
 
 mod dto;
 mod handlers;

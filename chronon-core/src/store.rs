@@ -16,10 +16,10 @@ use crate::models::{
 ///
 /// | Adapter | Public crate feature | Topology fit |
 /// |---------|----------------|--------------|
-/// | `InMemorySchedulerStore` | `mem` | Mode 1 local / tests (not multi-process) |
-/// | `SqliteSchedulerStore` | `sqlite` | Mode 1 single-host durable |
-/// | `PostgresSchedulerStore` | `postgres` | Mode 2 shared durable |
-/// | `PostgresRedisSchedulerStore` | `postgres,redis` | Mode 2 production claim path |
+/// | `InMemorySchedulerStore` | `mem` | Embedded local / tests (not multi-process) |
+/// | `SqliteSchedulerStore` | `sqlite` | Embedded single-host durable |
+/// | `PostgresSchedulerStore` | `postgres` | Coordinator–worker shared durable |
+/// | `PostgresRedisSchedulerStore` | `postgres,redis` | Coordinator–worker production claim path |
 ///
 /// Inject via `ChrononBuilder::scheduler_store` (or [`crate::StoreRouter`] +
 /// `scheduler_store_from_global`). Custom adapters implement this trait in a separate crate.

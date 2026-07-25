@@ -1,11 +1,12 @@
 //! Redis ready-queue composite over a SQL [`SchedulerStore`](chronon_core::store::SchedulerStore).
 //!
-//! **When to use:** production **Mode 2** (and Mode 1) when you want Postgres durability with a
-//! Redis claim hot path. Enable **`postgres` and `redis`** on the `chronon` crate.
+//! **When to use:** production **coordinator–worker** (and embedded) when you want Postgres
+//! durability with a Redis claim hot path. Enable **`postgres` and `redis`** on the `chronon`
+//! crate.
 //!
 //! Getting started:
-//! [Mode 1](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary) /
-//! [Mode 2](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-2--coordinator--worker-two-binaries).
+//! [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+//! [Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split).
 //!
 //! ## Stack position
 //!
@@ -26,7 +27,7 @@
 //! - Set `CHRONON_POSTGRES_URL` and `CHRONON_REDIS_URL` (or `CHRONON_TEST_*` in tests).
 //! - Optional Redis **key prefix** to isolate tenants (`connect(..., Some("myapp"))`).
 //!
-//! ## Mode 1 — Embedded
+//! ## Embedded
 //!
 //! ```ignore
 //! use std::sync::Arc;
@@ -49,7 +50,7 @@
 //!
 //! Runnable: `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis`
 //!
-//! ## Mode 2 — Coordinator binary
+//! ## Coordinator binary
 //!
 //! Shared Postgres + Redis with workers. Tick only:
 //!
@@ -76,7 +77,7 @@
 //!
 //! Runnable: `cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis`
 //!
-//! ## Mode 2 — Worker binary
+//! ## Worker binary
 //!
 //! Same URLs, unique `CHRONON_INSTANCE_ID`, scripts via `.auto_registry()`:
 //!

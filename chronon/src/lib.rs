@@ -12,7 +12,7 @@
 //! - **Durable jobs and runs** — schedule config, revisions, and execution history on
 //!   [`SchedulerStore`](chronon_core::SchedulerStore).
 //! - **Upsert-by-name** — HTTP/job upsert preserves `job_id` when `job_name` already exists and
-//!   bumps revision (see Mode 3 / axum handlers).
+//!   bumps revision (see [Remote HTTP client](#remote-http-client) / axum handlers).
 //! - **Security bounds** — list pagination and policy knobs clamp to
 //!   [`MAX_LIST_LIMIT`](chronon_core::MAX_LIST_LIMIT) / related ceilings.
 //! - **Revision redaction** — HTTP revision responses omit actor/params; store keeps full snapshots.
@@ -39,25 +39,24 @@
 //!
 //! ## Choose a topology
 //!
-//! - **[Mode 1 — Embedded](#mode-1--embedded-one-binary)** — one binary schedules **and**
+//! - **[Embedded (one process)](#embedded-one-process)** — one binary schedules **and**
 //!   executes. Start here.
-//! - **[Mode 2 — Coordinator + worker](#mode-2--coordinator--worker-two-binaries)** — one
-//!   process ticks / enqueues; one or more **worker** binaries claim and run scripts.
-//! - **[Mode 3 — Remote HTTP client](#mode-3--remote-http-client-optional)** — your app has
-//!   **no** local Chronon loops; it talks to a coordinator HTTP API via
-//!   [`RemoteCoordinatorClient`]. Optional.
+//! - **[Coordinator–worker (split processes)](#coordinator-worker-split)** — one process ticks /
+//!   enqueues; one or more **worker** binaries claim and run scripts.
+//! - **[Remote HTTP client](#remote-http-client)** — your app has **no** local Chronon loops; it
+//!   talks to a coordinator HTTP API via [`RemoteCoordinatorClient`]. Optional.
 //!
 //! | Topology | Builder | Store fit | When to use |
 //! |----------|---------|-----------|-------------|
 //! | Embedded | [`.embedded()`](ChrononBuilder::embedded) | mem / sqlite / postgres / postgres+redis | Local, single host, or simple production |
 //! | Coordinator | [`.coordinator_only()`](ChrononBuilder::coordinator_only) | Shared durable (postgres ± redis) | Scale-out: tick only |
 //! | Worker | [`.worker(pool)`](ChrononBuilder::worker) | Same shared store | Scale-out: claim + execute |
-//! | Remote client | [`.remote_coordinator(url)`](ChrononBuilder::remote_coordinator) | None locally | Schedule via HTTP (Mode 3) |
+//! | Remote client | [`.remote_coordinator(url)`](ChrononBuilder::remote_coordinator) | None locally | Schedule via HTTP |
 //!
-//! Topology is [`DeploymentShape`] on [`ChrononBuilder`]. After you pick a mode, continue with
-//! [define a script](#4-define-a-script) (shared by every mode).
+//! Topology is [`DeploymentShape`] on [`ChrononBuilder`]. After you pick a topology, continue with
+//! [define a script](#4-define-a-script) (shared by every topology).
 //!
-//! ## Mode 1 — Embedded (one binary)
+//! ## Embedded (one process)
 //!
 //! This process runs the scheduler tick **and** the worker. There is no second binary.
 //!
@@ -67,12 +66,12 @@
 //!                                            └──► mem / SQLite / Postgres / Postgres+Redis
 //! ```
 //!
-//! | Backend | Type | Feature | Topology | Mode 1 boot |
-//! |---------|------|---------|----------|-------------|
+//! | Backend | Type | Feature | Topology | Embedded boot |
+//! |---------|------|---------|----------|---------------|
 //! | In-memory | [`InMemorySchedulerStore`] | `mem` | embedded only | Below |
-//! | SQLite | [`SqliteSchedulerStore`] | `sqlite` | embedded | [sqlite crate](../chronon_backend_sqlite/index.html#mode-1--embedded) |
-//! | PostgreSQL | [`PostgresSchedulerStore`] | `postgres` | embedded or Mode 2 | [postgres crate](../chronon_backend_postgres/index.html#mode-1--embedded) |
-//! | Postgres + Redis | [`PostgresRedisSchedulerStore`] | `postgres,redis` | embedded or Mode 2 | [redis crate](../chronon_backend_redis/index.html#mode-1--embedded) |
+//! | SQLite | [`SqliteSchedulerStore`] | `sqlite` | embedded | [sqlite crate](../chronon_backend_sqlite/index.html#embedded) |
+//! | PostgreSQL | [`PostgresSchedulerStore`] | `postgres` | embedded or coordinator–worker | [postgres crate](../chronon_backend_postgres/index.html#embedded) |
+//! | Postgres + Redis | [`PostgresRedisSchedulerStore`] | `postgres,redis` | embedded or coordinator–worker | [redis crate](../chronon_backend_redis/index.html#embedded) |
 //!
 //! **In-memory first run** — `#[chronon::script]` generates a handle factory and
 //! `NightlyCleanupParams`; prefer that over stringly `Job::new`:
@@ -114,14 +113,14 @@
 //! ```
 //!
 //! Runnable: `script_handle_job`, `script_macro`, `embedded_tick`, `run_now` (`--features mem`).
-//! Other stores: follow the Mode 1 links in the table above. Then continue with
+//! Other stores: follow the Embedded links in the table above. Then continue with
 //! [define a script](#4-define-a-script).
 //!
-//! ## Mode 2 — Coordinator + worker (two binaries)
+//! ## Coordinator–worker (split processes)
 //!
 //! Use this when you want **scale-out execution** or to keep scheduling separate from script
 //! work. Both processes share the same durable store; they do **not** share memory.
-//! [`InMemorySchedulerStore`] cannot cross process boundaries — Mode 2 needs SQLite
+//! [`InMemorySchedulerStore`] cannot cross process boundaries — coordinator–worker needs SQLite
 //! (same-host file), Postgres, or Postgres+Redis.
 //!
 //! ```text
@@ -143,19 +142,19 @@
 //!
 //! Wire coordinator and worker from the adapter pages (production default: Postgres + Redis):
 //!
-//! | Backend | Feature | Mode 2 coordinator | Mode 2 worker |
-//! |---------|---------|--------------------|---------------|
-//! | Postgres + Redis | `postgres,redis` | [Coordinator](../chronon_backend_redis/index.html#mode-2--coordinator-binary) | [Worker](../chronon_backend_redis/index.html#mode-2--worker-binary) |
-//! | PostgreSQL | `postgres` | [Coordinator](../chronon_backend_postgres/index.html#mode-2--coordinator-binary) | [Worker](../chronon_backend_postgres/index.html#mode-2--worker-binary) |
-//! | SQLite (same host) | `sqlite` | [Coordinator](../chronon_backend_sqlite/index.html#mode-2--coordinator-binary) | [Worker](../chronon_backend_sqlite/index.html#mode-2--worker-binary) |
+//! | Backend | Feature | Coordinator | Worker |
+//! |---------|---------|-------------|--------|
+//! | Postgres + Redis | `postgres,redis` | [Coordinator](../chronon_backend_redis/index.html#coordinator-binary) | [Worker](../chronon_backend_redis/index.html#worker-binary) |
+//! | PostgreSQL | `postgres` | [Coordinator](../chronon_backend_postgres/index.html#coordinator-binary) | [Worker](../chronon_backend_postgres/index.html#worker-binary) |
+//! | SQLite (same host) | `sqlite` | [Coordinator](../chronon_backend_sqlite/index.html#coordinator-binary) | [Worker](../chronon_backend_sqlite/index.html#worker-binary) |
 //!
 //! ### Run both
 //!
 //! 1. Start Postgres (and Redis). Set `CHRONON_POSTGRES_URL` / `CHRONON_REDIS_URL`.
 //! 2. Start the **coordinator** (`init_partitions` then [`Chronon::run`]).
 //! 3. Start one or more **workers** with unique `CHRONON_INSTANCE_ID` values.
-//! 4. Upsert jobs (via [`ScriptHandle`]) from the coordinator, an Axum host, or
-//!    [Mode 3](#mode-3--remote-http-client-optional).
+//! 4. Upsert jobs (via [`ScriptHandle`]) from the coordinator, an Axum host, or a
+//!    [remote HTTP client](#remote-http-client).
 //!
 //! ```bash
 //! export CHRONON_POSTGRES_URL=postgres://user:pass@localhost/chronon
@@ -164,16 +163,24 @@
 //! CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example worker_daemon --features postgres,redis
 //! ```
 //!
-//! ## Mode 3 — Remote HTTP client (optional)
+//! Same-host SQLite split (shared file path):
+//!
+//! ```bash
+//! export CHRONON_SQLITE_PATH=/tmp/chronon-split.db
+//! cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite &
+//! CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+//! ```
+//!
+//! ## Remote HTTP client
 //!
 //! Use this when an application process should **schedule or trigger jobs** but must not run
-//! Chronon loops locally. Pair it with a host that mounts [`chronon_router`] on a Mode 1 or
-//! Mode 2 coordinator process.
+//! Chronon loops locally. Pair it with a host that mounts [`chronon_router`] on an embedded or
+//! coordinator–worker coordinator process.
 //!
 //! ```text
 //! App binary ──RemoteCoordinatorClient──HTTP──► API host (chronon_router)
 //!                                                    │
-//!                                                    └── Mode 1 or Mode 2 coordinator + store
+//!                                                    └── embedded or coordinator + store
 //! ```
 //!
 //! **API host** — nest the router under [`API_PREFIX`] (`/api/chronon`) **behind host
@@ -225,8 +232,8 @@
 //! ```
 //!
 //! Use [`.auto_registry()`](ChrononBuilder::auto_registry) so inventory picks up every
-//! `#[chronon::script]` linked into the binary. In Mode 2, scripts must be linked into
-//! **worker** binaries (that is where they run).
+//! `#[chronon::script]` linked into the binary. In a coordinator–worker split, scripts must be
+//! linked into **worker** binaries (that is where they run).
 //!
 //! See [`script`], [`ScriptHandle`], and [`ScriptContext`](chronon_core::ScriptContext).
 //! Runnable: `script_handle_job`, `script_macro`.
@@ -266,20 +273,20 @@
 //! Cron uses standard five-field syntax (optional sixth field for seconds). Parse helpers:
 //! [`CronExpr`]. Runnable: `script_handle_job`, `run_now`, `embedded_tick`.
 //!
-//! Storage wiring: [Mode 1](#mode-1--embedded-one-binary) (mem below; other backends on adapter
-//! crates) and [Mode 2](#mode-2--coordinator--worker-two-binaries) (link table).
+//! Storage wiring: [Embedded](#embedded-one-process) (mem below; other backends on adapter
+//! crates) and [Coordinator–worker](#coordinator-worker-split) (link table).
 //!
 //! # Notes
 //!
 //! - **No default Cargo features** — enable `mem`, `sqlite`, `postgres`, `redis`, and/or `axum`
 //!   explicitly. Document the public crate with `--all-features` so rustdoc links resolve.
-//! - **Mode 2 scripts live on workers** — inventory must be linked into the binary that calls
-//!   `.worker(...)`; the coordinator ticks but does not execute handlers.
+//! - **Coordinator–worker scripts live on workers** — inventory must be linked into the binary
+//!   that calls `.worker(...)`; the coordinator ticks but does not execute handlers.
 //! - **Call `scheduler.init_partitions().await` before [`Chronon::run`]** on embedded and
 //!   coordinator-only shapes.
 //! - **RemoteClient must not call [`Chronon::run`]** — that shape returns an error; use
 //!   [`RemoteCoordinatorClient`].
-//! - **`mem` is Mode 1 only** — it does not cross process boundaries.
+//! - **`mem` is embedded-only** — it does not cross process boundaries.
 //!
 //! # Architecture
 //!
@@ -307,7 +314,7 @@
 //!         └──► Executor + ScriptRegistry  ◄── ContextFactory / #[chronon::script]
 //! ```
 //!
-//! Mode 2 splits the loops across processes that share the store:
+//! Coordinator–worker splits the loops across processes that share the store:
 //!
 //! ```text
 //! Coordinator ──.coordinator_only()──► tick + partitions ──► SchedulerStore
@@ -339,7 +346,7 @@
 //!
 //! | Feature | Type | Status |
 //! |---------|------|--------|
-//! | `mem` | [`InMemorySchedulerStore`] | Ready — tests and local Mode 1 |
+//! | `mem` | [`InMemorySchedulerStore`] | Ready — tests and local embedded |
 //! | `sqlite` | [`SqliteSchedulerStore`] | Ready — embedded file-backed |
 //! | `postgres` | [`PostgresSchedulerStore`] | Ready — shared durable |
 //! | `redis` | [`PostgresRedisSchedulerStore`] | Ready — Postgres + Redis claim overlay (**requires `postgres`**) |
@@ -350,18 +357,22 @@
 //!
 //! | Example | Topology | Features |
 //! |---------|----------|----------|
-//! | `script_macro` | Mode 1 | `mem` |
-//! | `script_handle_job` | Mode 1 | `mem` |
-//! | `run_now` | Mode 1 | `mem` |
-//! | `embedded_tick` | Mode 1 | `mem` |
-//! | `store_router_boot` | Mode 1 | `mem` |
-//! | `sqlite_boot` | Mode 1 | `sqlite` |
-//! | `postgres_boot` | Mode 1 | `postgres` |
-//! | `postgres_redis_boot` | Mode 1 | `postgres,redis` |
-//! | `axum_host` | Mode 1 + HTTP | `mem,axum` |
-//! | `axum_auth_wrap` | Mode 1 + HTTP + host auth demo | `mem,axum` |
-//! | `coordinator_daemon` | Mode 2 coordinator | `postgres,redis` |
-//! | `worker_daemon` | Mode 2 worker | `postgres,redis` |
+//! | `script_macro` | Embedded | `mem` |
+//! | `script_handle_job` | Embedded | `mem` |
+//! | `run_now` | Embedded | `mem` |
+//! | `embedded_tick` | Embedded | `mem` |
+//! | `store_router_boot` | Embedded | `mem` |
+//! | `sqlite_boot` | Embedded | `sqlite` |
+//! | `postgres_boot` | Embedded | `postgres` |
+//! | `postgres_redis_boot` | Embedded | `postgres,redis` |
+//! | `axum_host` | Embedded + HTTP | `mem,axum` |
+//! | `axum_auth_wrap` | Embedded + HTTP + host auth demo | `mem,axum` |
+//! | `sqlite_coordinator_daemon` | Coordinator–worker (SQLite) | `sqlite` |
+//! | `sqlite_worker_daemon` | Coordinator–worker (SQLite) | `sqlite` |
+//! | `postgres_coordinator_daemon` | Coordinator–worker (Postgres) | `postgres` |
+//! | `postgres_worker_daemon` | Coordinator–worker (Postgres) | `postgres` |
+//! | `coordinator_daemon` | Coordinator–worker (Postgres+Redis) | `postgres,redis` |
+//! | `worker_daemon` | Coordinator–worker (Postgres+Redis) | `postgres,redis` |
 //!
 //! ```bash
 //! cargo run -p uf-chronon --example script_handle_job --features mem

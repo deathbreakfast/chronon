@@ -14,7 +14,7 @@ use serde_json::Value;
 /// Use this when the host (or Axum handlers) needs to upsert jobs, pause/resume, list runs,
 /// or trigger [`Self::run_now`] without owning scheduler ticks. Obtained from
 /// [`crate::Chronon::coordinator_service`] or constructed with [`Self::new`] for HTTP /
-/// Mode 3 API hosts.
+/// remote-client API hosts.
 ///
 /// | Method | Role |
 /// |--------|------|
@@ -23,7 +23,7 @@ use serde_json::Value;
 /// | [`Self::list_jobs`] / [`Self::list_runs`] | Admin / HTTP list |
 ///
 /// For remote processes that cannot share the store, use [`crate::RemoteCoordinatorClient`]
-/// against a host that mounts `chronon_router` (Mode 3).
+/// against a host that mounts `chronon_router` (remote HTTP client topology).
 ///
 /// # Examples
 ///

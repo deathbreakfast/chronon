@@ -53,17 +53,24 @@ Builder `.tick_interval_ms()` overrides `CHRONON_TICK_INTERVAL_MS`. Partition co
 
 ## Examples
 
-| Example | Features | Command |
-|---------|----------|---------|
-| `script_macro` | `mem` | `cargo run -p uf-chronon --example script_macro --features mem` |
-| `script_handle_job` | `mem` | `cargo run -p uf-chronon --example script_handle_job --features mem` |
-| `run_now` | `mem` | `cargo run -p uf-chronon --example run_now --features mem` |
-| `embedded_tick` | `mem` | `cargo run -p uf-chronon --example embedded_tick --features mem` |
-| `store_router_boot` | `mem` | `cargo run -p uf-chronon --example store_router_boot --features mem` |
-| `sqlite_boot` | `sqlite` | `cargo run -p uf-chronon --example sqlite_boot --features sqlite` |
-| `postgres_boot` | `postgres` | `cargo run -p uf-chronon --example postgres_boot --features postgres` |
-| `postgres_redis_boot` | `postgres`, `redis` | `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis` |
-| `axum_host` | `mem`, `axum` | `cargo run -p uf-chronon --example axum_host --features mem,axum` |
+| Example | Topology | Features | Command |
+|---------|----------|----------|---------|
+| `script_macro` | Embedded | `mem` | `cargo run -p uf-chronon --example script_macro --features mem` |
+| `script_handle_job` | Embedded | `mem` | `cargo run -p uf-chronon --example script_handle_job --features mem` |
+| `run_now` | Embedded | `mem` | `cargo run -p uf-chronon --example run_now --features mem` |
+| `embedded_tick` | Embedded | `mem` | `cargo run -p uf-chronon --example embedded_tick --features mem` |
+| `store_router_boot` | Embedded | `mem` | `cargo run -p uf-chronon --example store_router_boot --features mem` |
+| `sqlite_boot` | Embedded | `sqlite` | `cargo run -p uf-chronon --example sqlite_boot --features sqlite` |
+| `postgres_boot` | Embedded | `postgres` | `cargo run -p uf-chronon --example postgres_boot --features postgres` |
+| `postgres_redis_boot` | Embedded | `postgres`, `redis` | `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis` |
+| `axum_host` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_host --features mem,axum` |
+| `axum_auth_wrap` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum` |
+| `sqlite_coordinator_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite` |
+| `sqlite_worker_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite` |
+| `postgres_coordinator_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_coordinator_daemon --features postgres` |
+| `postgres_worker_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_worker_daemon --features postgres` |
+| `coordinator_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis` |
+| `worker_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example worker_daemon --features postgres,redis` |
 
 ## Documentation
 

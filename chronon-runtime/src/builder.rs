@@ -10,20 +10,21 @@ use chronon_scheduler::{Scheduler, SchedulerConfig};
 use chronon_telemetry::{NoOpSink, TelemetrySink};
 use tokio::sync::{mpsc, Notify};
 
-/// Named deployment assembly — not a global mode enum.
+/// Named deployment assembly — process topology shape.
 ///
 /// Selected via [`ChrononBuilder`] fluent methods; drives which loops
-/// [`crate::Chronon::run`] starts. Maps to the public crate getting-started modes:
+/// [`crate::Chronon::run`] starts. Maps to the public crate getting-started topologies:
 ///
 /// | Shape | Builder | Local loops | When to use |
 /// |-------|---------|-------------|-------------|
-/// | [`Self::Embedded`] | [`.embedded()`](ChrononBuilder::embedded) | Tick **and** worker | Mode 1 — one binary |
-/// | [`Self::CoordinatorOnly`] | [`.coordinator_only()`](ChrononBuilder::coordinator_only) | Tick only | Mode 2 coordinator binary |
-/// | [`Self::Worker`] | [`.worker(pool)`](ChrononBuilder::worker) | Claim + execute | Mode 2 worker binary(ies) |
-/// | [`Self::RemoteClient`] | [`.remote_coordinator(url)`](ChrononBuilder::remote_coordinator) | **None** | Mode 3 — schedule via HTTP |
+/// | [`Self::Embedded`] | [`.embedded()`](ChrononBuilder::embedded) | Tick **and** worker | Embedded — one process |
+/// | [`Self::CoordinatorOnly`] | [`.coordinator_only()`](ChrononBuilder::coordinator_only) | Tick only | Coordinator–worker coordinator binary |
+/// | [`Self::Worker`] | [`.worker(pool)`](ChrononBuilder::worker) | Claim + execute | Coordinator–worker worker binary(ies) |
+/// | [`Self::RemoteClient`] | [`.remote_coordinator(url)`](ChrononBuilder::remote_coordinator) | **None** | Remote HTTP client — schedule via HTTP |
 ///
-/// Mode 2 and Mode 3 need a shared durable store (Postgres, usually + Redis).
-/// See [`crate::RemoteCoordinatorClient`] for the HTTP client path.
+/// Coordinator–worker and remote HTTP client need a shared durable store (Postgres, usually +
+/// Redis) on the host that runs Chronon loops. See [`crate::RemoteCoordinatorClient`] for the
+/// HTTP client path.
 ///
 /// # Examples
 ///
@@ -36,14 +37,14 @@ use tokio::sync::{mpsc, Notify};
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum DeploymentShape {
-    /// Coordinator tick loop + worker in one process (Mode 1 default).
+    /// Coordinator tick loop + worker in one process (embedded default).
     #[default]
     Embedded,
-    /// Scheduler tick and partition assigner only; no script execution (Mode 2 coordinator).
+    /// Scheduler tick and partition assigner only; no script execution (coordinator binary).
     CoordinatorOnly,
-    /// Worker loop for `pool_id`; claims runs from the shared store (Mode 2 worker).
+    /// Worker loop for `pool_id`; claims runs from the shared store (worker binary).
     Worker(String),
-    /// No local loops; host uses [`crate::RemoteCoordinatorClient`] against `base_url` (Mode 3).
+    /// No local loops; host uses [`crate::RemoteCoordinatorClient`] against `base_url`.
     RemoteClient(String),
 }
 
@@ -55,11 +56,11 @@ pub enum DeploymentShape {
 /// Choose topology with [`.embedded()`](Self::embedded) / [`.coordinator_only()`](Self::coordinator_only) /
 /// [`.worker()`](Self::worker) / [`.remote_coordinator()`](Self::remote_coordinator) — see
 /// [`DeploymentShape`]. Use [`.auto_registry()`](Self::auto_registry) to pick up `#[chronon::script]`
-/// handlers linked into this binary (required on Mode 2 **workers**).
+/// handlers linked into this binary (required on coordinator–worker **workers**).
 ///
 /// # Examples
 ///
-/// Mode 1 — embedded with an empty registry:
+/// Embedded with an empty registry:
 ///
 /// ```
 /// use std::sync::Arc;
@@ -76,7 +77,7 @@ pub enum DeploymentShape {
 /// assert_eq!(chronon.executor().script_count(), 0);
 /// ```
 ///
-/// Mode 2 worker shape (scripts must be registered on this binary):
+/// Worker shape (scripts must be registered on this binary):
 ///
 /// ```
 /// use std::sync::Arc;
@@ -153,25 +154,25 @@ impl ChrononBuilder {
         self
     }
 
-    /// Embedded coordinator + worker loops in one process (Mode 1).
+    /// Embedded coordinator + worker loops in one process.
     pub fn embedded(mut self) -> Self {
         self.deployment = DeploymentShape::Embedded;
         self
     }
 
-    /// Coordinator-only: tick and partition assigner, no worker slots (Mode 2 coordinator).
+    /// Coordinator-only: tick and partition assigner, no worker slots.
     pub fn coordinator_only(mut self) -> Self {
         self.deployment = DeploymentShape::CoordinatorOnly;
         self
     }
 
-    /// Worker-only: claim and execute runs for `pool_id` (Mode 2 worker).
+    /// Worker-only: claim and execute runs for `pool_id`.
     pub fn worker(mut self, pool_id: impl Into<String>) -> Self {
         self.deployment = DeploymentShape::Worker(pool_id.into());
         self
     }
 
-    /// Remote client shape: no local loops; pair with [`crate::RemoteCoordinatorClient`] (Mode 3).
+    /// Remote client shape: no local loops; pair with [`crate::RemoteCoordinatorClient`].
     ///
     /// [`crate::Chronon::run`] returns an error for this shape — schedule via the HTTP client.
     pub fn remote_coordinator(mut self, base_url: impl Into<String>) -> Self {
@@ -181,7 +182,8 @@ impl ChrononBuilder {
 
     /// Populate registry from `inventory` (`#[chronon::script]` link-time registration).
     ///
-    /// In Mode 2, call this on **worker** binaries (that is where scripts execute).
+    /// In a coordinator–worker split, call this on **worker** binaries (that is where scripts
+    /// execute).
     pub fn auto_registry(mut self) -> Self {
         self.auto_registry = true;
         self

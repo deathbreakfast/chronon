@@ -1,12 +1,12 @@
 //! `SQLite` [`SchedulerStore`](chronon_core::store::SchedulerStore) for Chronon.
 //!
-//! **When to use:** durable single-host **Mode 1**, or same-host **Mode 2** when coordinator and
-//! worker open the **same database file** (SQLite allows one writer at a time — prefer Postgres
-//! ± Redis for multi-worker fleets).
+//! **When to use:** durable single-host **embedded**, or same-host **coordinator–worker** when
+//! coordinator and worker open the **same database file** (SQLite allows one writer at a time —
+//! prefer Postgres ± Redis for multi-worker fleets).
 //!
 //! Getting started:
-//! [Mode 1](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary) /
-//! [Mode 2](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-2--coordinator--worker-two-binaries).
+//! [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+//! [Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split).
 //!
 //! ## Stack position
 //!
@@ -19,7 +19,7 @@
 //! - [`SqliteSchedulerStore::new`] — open a database file
 //! - [`SqliteSchedulerStore::connect`] — connect via URL (including `:memory:`)
 //!
-//! ## Mode 1 — Embedded
+//! ## Embedded
 //!
 //! ```ignore
 //! use std::sync::Arc;
@@ -37,7 +37,7 @@
 //!
 //! Runnable: `cargo run -p uf-chronon --example sqlite_boot --features sqlite`
 //!
-//! ## Mode 2 — Coordinator binary
+//! ## Coordinator binary
 //!
 //! Shared file path with the worker. Tick only — no script execution in this process:
 //!
@@ -59,7 +59,9 @@
 //! chronon.run().await?;
 //! ```
 //!
-//! ## Mode 2 — Worker binary
+//! Runnable: `cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite`
+//!
+//! ## Worker binary
 //!
 //! Same `CHRONON_SQLITE_PATH`, unique `CHRONON_INSTANCE_ID`, scripts linked via `.auto_registry()`:
 //!
@@ -81,9 +83,11 @@
 //! chronon.run().await?;
 //! ```
 //!
-//! Other Mode 2 backends:
-//! [Postgres](../chronon_backend_postgres/index.html#mode-2--coordinator-binary),
-//! [Postgres + Redis](../chronon_backend_redis/index.html#mode-2--coordinator-binary).
+//! Runnable: `cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite`
+//!
+//! Other coordinator–worker backends:
+//! [Postgres](../chronon_backend_postgres/index.html#coordinator-binary),
+//! [Postgres + Redis](../chronon_backend_redis/index.html#coordinator-binary).
 
 use std::path::Path;
 
@@ -93,12 +97,12 @@ use sqlx::SqlitePool;
 
 /// SQLite-backed scheduler store.
 ///
-/// Durable **single-host** persistence for Mode 1 embedded deployments and CI. SQLite allows
-/// one writer at a time — prefer Postgres (+ Redis) for multi-worker Mode 2 claim throughput.
-/// Same-host Mode 2 is possible when both binaries open the **same path**.
+/// Durable **single-host** persistence for embedded deployments and CI. SQLite allows one writer
+/// at a time — prefer Postgres (+ Redis) for multi-worker coordinator–worker claim throughput.
+/// Same-host coordinator–worker is possible when both binaries open the **same path**.
 ///
-/// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /
-/// [worker](index.html#mode-2--worker-binary).
+/// Split examples: [coordinator](index.html#coordinator-binary) /
+/// [worker](index.html#worker-binary).
 ///
 /// Enable the public crate `sqlite` feature. Construct with [`Self::new`] (file path) or
 /// [`Self::connect`] (URL, including `sqlite://:memory:`).

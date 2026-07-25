@@ -35,7 +35,7 @@ See the `axum_auth_wrap` example (`cargo run -p uf-chronon --example axum_auth_w
 
 ### Persistence credentials
 
-Any process that can open the Postgres / SQLite / Redis URLs used by Chronon can enqueue, claim, and observe runs for that deployment (Mode 2 split: coordinator and workers share the store). Treat connection strings as high-privilege secrets. Prefer TLS and authenticated Redis; use a unique Redis `key_prefix` per deployment.
+Any process that can open the Postgres / SQLite / Redis URLs used by Chronon can enqueue, claim, and observe runs for that deployment (coordinator–worker split: coordinator and workers share the store). Treat connection strings as high-privilege secrets. Prefer TLS and authenticated Redis; use a unique Redis `key_prefix` per deployment.
 
 Isolated Postgres schemas (`connect_postgres_isolated` / `CHRONON_POSTGRES_SCHEMA`) accept only allowlisted identifiers (`^[A-Za-z_][A-Za-z0-9_]*$`).
 

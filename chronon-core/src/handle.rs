@@ -14,7 +14,8 @@ use crate::Result;
 /// moves the body to an internal `__*_impl` entry point used by the executor.
 ///
 /// After building a [`Job`], set [`crate::ScheduleKind`] / cron fields and upsert via
-/// `CoordinatorService` (Mode 1–2) or `RemoteCoordinatorClient` (Mode 3).
+/// `CoordinatorService` (embedded / coordinator–worker) or `RemoteCoordinatorClient`
+/// (remote HTTP client).
 ///
 /// # Examples
 ///

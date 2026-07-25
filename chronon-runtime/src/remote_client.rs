@@ -126,10 +126,11 @@ struct JobActionRequest {
     params: Option<Value>,
 }
 
-/// HTTP client for Mode 3 — schedule/trigger jobs without local Chronon loops.
+/// HTTP client for the remote HTTP client topology — schedule/trigger jobs without local
+/// Chronon loops.
 ///
 /// Targets the `chronon-axum` API at `{base_url}/api/chronon/*` (see `API_PREFIX`).
-/// Pair with a host that mounts `chronon_router` on a Mode 1 or Mode 2 coordinator process.
+/// Pair with a host that mounts `chronon_router` on an embedded or coordinator–worker process.
 ///
 /// | Method | HTTP |
 /// |--------|------|

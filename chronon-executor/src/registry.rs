@@ -19,9 +19,9 @@ struct StoredScript {
 /// `#[chronon::script]`) or manual [`Self::register`] calls. Read by the executor when a run is
 /// claimed.
 ///
-/// In Mode 2 (coordinator + worker), scripts must be registered on **worker** binaries —
-/// that is where handlers execute. Prefer `ChrononBuilder::auto_registry()` so inventory is
-/// collected automatically.
+/// In a coordinator–worker split, scripts must be registered on **worker** binaries — that is
+/// where handlers execute. Prefer `ChrononBuilder::auto_registry()` so inventory is collected
+/// automatically.
 ///
 /// # Examples
 ///
@@ -81,7 +81,7 @@ impl ScriptRegistry {
 
     /// Populate from all `#[chronon::script]` descriptors linked into the binary.
     ///
-    /// Equivalent to `ChrononBuilder::auto_registry()` wiring. Prefer this on Mode 2 workers.
+    /// Equivalent to `ChrononBuilder::auto_registry()` wiring. Prefer this on worker binaries.
     pub fn from_inventory() -> Self {
         let mut registry = Self::new();
         registry.register_from_inventory();

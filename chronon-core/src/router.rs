@@ -23,15 +23,16 @@ fn global_router() -> &'static RwLock<StoreRouter> {
 
 /// Registers named [`SchedulerStore`] backends at host boot.
 ///
-/// Use for multi-store hosts or a single default via [`DEFAULT_STORE_NAME`]. Typical Mode 1
+/// Use for multi-store hosts or a single default via [`DEFAULT_STORE_NAME`]. Typical embedded
 /// flow:
 ///
 /// 1. [`Self::register_global`] (or `install_default_mem_store` from the mem backend).
 /// 2. `ChrononBuilder::scheduler_store_from_global()`.
 ///
-/// Prefer passing a store directly to `ChrononBuilder::scheduler_store` in Mode 2/3 when each
-/// binary already shares connection URLs — the global router is optional convenience for
-/// single-process boots, not a substitute for a shared durable database.
+/// Prefer passing a store directly to `ChrononBuilder::scheduler_store` in coordinator–worker
+/// or remote-HTTP setups when each binary already shares connection URLs — the global router
+/// is optional convenience for single-process boots, not a substitute for a shared durable
+/// database.
 ///
 /// Thread-safe when accessed through [`Self::register_global`] / [`default_store_from_global`];
 /// direct mutation requires exclusive access to the router instance.

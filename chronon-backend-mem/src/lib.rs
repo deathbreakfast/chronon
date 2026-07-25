@@ -1,11 +1,11 @@
 //! In-memory [`SchedulerStore`](chronon_core::SchedulerStore) for tests and local development.
 //!
-//! Process-local, **non-durable** storage. Suitable for **Mode 1 embedded** boots, examples,
-//! e2e, and benchmarks — **not** for multi-process Mode 2 clusters (`mem` does not cross
+//! Process-local, **non-durable** storage. Suitable for **embedded** boots, examples, e2e, and
+//! benchmarks — **not** for multi-process coordinator–worker clusters (`mem` does not cross
 //! process boundaries).
 //!
 //! Getting started on the public crate:
-//! [Mode 1 — Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary).
+//! [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process).
 //!
 //! ## Entry points
 //!
@@ -14,7 +14,7 @@
 //!
 //! Enable the `mem` feature on the `chronon` crate to re-export these types.
 //!
-//! ## Mode 1 — Embedded
+//! ## Embedded
 //!
 //! Wire with `ChrononBuilder::scheduler_store(Arc::new(InMemorySchedulerStore::new())).embedded()`
 //! on the `chronon` crate (`mem` feature).

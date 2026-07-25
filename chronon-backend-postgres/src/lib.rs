@@ -1,12 +1,12 @@
 //! `PostgreSQL` [`SchedulerStore`](chronon_core::store::SchedulerStore) for Chronon.
 //!
-//! **When to use:** shared durable storage for **Mode 1** or **Mode 2** coordinator–worker
-//! clusters. For higher claim throughput, wrap with `PostgresRedisSchedulerStore`
+//! **When to use:** shared durable storage for **embedded** or **coordinator–worker** clusters.
+//! For higher claim throughput, wrap with `PostgresRedisSchedulerStore`
 //! (`chronon-backend-redis`).
 //!
 //! Getting started:
-//! [Mode 1](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-1--embedded-one-binary) /
-//! [Mode 2](https://docs.rs/uf-chronon/latest/chronon/index.html#mode-2--coordinator--worker-two-binaries).
+//! [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+//! [Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split).
 //!
 //! ## Stack position
 //!
@@ -20,7 +20,7 @@
 //! - [`PostgresSchedulerStore::connect_isolated`] — isolated schema for parallel tests
 //! - [`postgres_test_url`] — resolve test URL from `CHRONON_POSTGRES_URL` / `CHRONON_TEST_POSTGRES_URL`
 //!
-//! ## Mode 1 — Embedded
+//! ## Embedded
 //!
 //! ```ignore
 //! use std::sync::Arc;
@@ -39,7 +39,7 @@
 //!
 //! Runnable: `cargo run -p uf-chronon --example postgres_boot --features postgres`
 //!
-//! ## Mode 2 — Coordinator binary
+//! ## Coordinator binary
 //!
 //! Shared `CHRONON_POSTGRES_URL` with workers. Tick only:
 //!
@@ -60,7 +60,9 @@
 //! chronon.run().await?;
 //! ```
 //!
-//! ## Mode 2 — Worker binary
+//! Runnable: `cargo run -p uf-chronon --example postgres_coordinator_daemon --features postgres`
+//!
+//! ## Worker binary
 //!
 //! Same Postgres URL, unique `CHRONON_INSTANCE_ID`, scripts via `.auto_registry()`:
 //!
@@ -81,7 +83,9 @@
 //! chronon.run().await?;
 //! ```
 //!
-//! Production claim path: [Postgres + Redis](../chronon_backend_redis/index.html#mode-2--coordinator-binary).
+//! Runnable: `cargo run -p uf-chronon --example postgres_worker_daemon --features postgres`
+//!
+//! Production claim path: [Postgres + Redis](../chronon_backend_redis/index.html#coordinator-binary).
 
 mod bootstrap;
 
@@ -93,12 +97,12 @@ pub use bootstrap::{postgres_store_from_env, postgres_test_url};
 
 /// PostgreSQL-backed scheduler store.
 ///
-/// Shared durable storage for Mode 2 coordinator–worker clusters (and Mode 1 when you already
-/// run Postgres). Pass a connection URL to [`Self::connect`]; daemons often use
+/// Shared durable storage for coordinator–worker clusters (and embedded when you already run
+/// Postgres). Pass a connection URL to [`Self::connect`]; daemons often use
 /// `CHRONON_POSTGRES_URL` / [`postgres_test_url`].
 ///
-/// Mode 2 examples: [coordinator](index.html#mode-2--coordinator-binary) /
-/// [worker](index.html#mode-2--worker-binary).
+/// Split examples: [coordinator](index.html#coordinator-binary) /
+/// [worker](index.html#worker-binary).
 ///
 /// For higher claim throughput, wrap with `PostgresRedisSchedulerStore` from
 /// `chronon-backend-redis` (`postgres` + `redis` features). Enable the public crate `postgres`

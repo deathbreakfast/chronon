@@ -125,7 +125,7 @@ Enable features explicitly — the public crate ships with **no default features
 
 ### Durable storage (SQLite)
 
-For file-backed persistence without external services:
+For file-backed persistence without external services (`CHRONON_SQLITE_PATH`, default `/tmp/chronon-example.db`):
 
 ```toml
 chronon = { package = "uf-chronon", version = "0.1", features = ["sqlite"] }
@@ -135,9 +135,28 @@ chronon = { package = "uf-chronon", version = "0.1", features = ["sqlite"] }
 cargo run -p uf-chronon --example sqlite_boot --features sqlite
 ```
 
+### Coordinator–worker (split processes)
+
+Same-host SQLite (shared file) or Postgres ± Redis. Production claim path uses Postgres + Redis:
+
+```bash
+# SQLite same-host
+export CHRONON_SQLITE_PATH=/tmp/chronon-split.db
+cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite &
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+
+# Postgres + Redis
+export CHRONON_POSTGRES_URL=postgres://user:pass@localhost/chronon
+export CHRONON_REDIS_URL=redis://127.0.0.1:6379
+cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis &
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+```
+
 See [`chronon-backend-sqlite/README.md`](chronon-backend-sqlite/README.md); for Postgres / Redis see [`chronon-backend-postgres`](chronon-backend-postgres/README.md) and [`chronon-backend-redis`](chronon-backend-redis/README.md).
 
-API details: [`chronon/README.md`](chronon/README.md) and `cargo doc -p uf-chronon --all-features --open`.
+API details: [`chronon/README.md`](chronon/README.md) and `cargo doc -p uf-chronon --all-features --open`
+([Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split)).
 
 ## Cargo features
 

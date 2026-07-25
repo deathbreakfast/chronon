@@ -32,7 +32,19 @@ let chronon = ChrononBuilder::new()
     .build()?;
 ```
 
-Runnable example: `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis`.
+Runnable examples:
+
+```bash
+# Embedded boot
+cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis
+
+# Coordinator–worker split (production claim path)
+cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis &
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+```
+
+Topology docs: [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split).
 
 ## Configuration
 

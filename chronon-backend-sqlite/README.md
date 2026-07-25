@@ -16,7 +16,7 @@ use chronon::prelude::*;
 use chronon_backend_sqlite::SqliteSchedulerStore;
 
 let store: Arc<dyn SchedulerStore> = Arc::new(
-    SqliteSchedulerStore::connect("sqlite://:memory:").await?,
+    SqliteSchedulerStore::new("/tmp/chronon-example.db").await?,
 );
 let chronon = ChrononBuilder::new()
     .scheduler_store(store)
@@ -24,7 +24,19 @@ let chronon = ChrononBuilder::new()
     .build()?;
 ```
 
-Runnable example: `cargo run -p uf-chronon --example sqlite_boot --features sqlite`.
+Runnable examples:
+
+```bash
+# Embedded (file-backed; set CHRONON_SQLITE_PATH or default /tmp/chronon-example.db)
+cargo run -p uf-chronon --example sqlite_boot --features sqlite
+
+# Coordinator–worker same-host split (shared CHRONON_SQLITE_PATH)
+cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite &
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+```
+
+Topology docs: [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split).
 
 ## Configuration
 
@@ -33,6 +45,7 @@ Runnable example: `cargo run -p uf-chronon --example sqlite_boot --features sqli
 | `SqliteSchedulerStore::new(path)` | File on disk (`/var/lib/chronon/chronon.db`) |
 | `SqliteSchedulerStore::connect(url)` | Full URL including `:memory:` for tests |
 | `SqliteSchedulerStore::from_pool(pool)` | Host already owns an `sqlx` pool |
+| `CHRONON_SQLITE_PATH` | Shared file path for examples / same-host split |
 
 Schema bootstrap runs automatically on connect.
 
