@@ -113,26 +113,47 @@ async fn worker_slot(
                 run_id: &run.run_id,
             });
 
-            let res = match job.timeout_ms {
+            let (status_result, logs) = match job.timeout_ms {
                 Some(ms) if ms > 0 => {
                     match timeout(Duration::from_millis(ms as u64), exec_fut).await {
-                        Ok(inner) => inner.map_err(|e| (RunStatus::Failed, e.to_string())),
-                        Err(_) => {
-                            Err((RunStatus::Timeout, format!("run exceeded timeout_ms={ms}")))
-                        }
+                        Ok(outcome) => (
+                            outcome
+                                .result
+                                .map_err(|e| (RunStatus::Failed, e.to_string())),
+                            outcome.logs,
+                        ),
+                        Err(_) => (
+                            Err((
+                                RunStatus::Timeout,
+                                format!("run exceeded timeout_ms={ms}"),
+                            )),
+                            chronon_telemetry::CapturedLogs::default(),
+                        ),
                     }
                 }
-                _ => exec_fut
-                    .await
-                    .map_err(|e| (RunStatus::Failed, e.to_string())),
+                _ => {
+                    let outcome = exec_fut.await;
+                    (
+                        outcome
+                            .result
+                            .map_err(|e| (RunStatus::Failed, e.to_string())),
+                        outcome.logs,
+                    )
+                }
             };
             renew_handle.abort();
 
             let duration_ms = (Utc::now() - started).num_milliseconds();
-            match res {
+            match status_result {
                 Ok(()) => {
                     run.complete();
                     run.duration_ms = Some(duration_ms);
+                    if logs.stdout_text.is_some() {
+                        run.stdout_text = logs.stdout_text;
+                    }
+                    if logs.stderr_text.is_some() {
+                        run.stderr_text = logs.stderr_text;
+                    }
                     telemetry.record_counter(
                         "chronon_runs_completed",
                         &[("job", job.job_name.as_str())],
@@ -149,7 +170,7 @@ async fn worker_slot(
                     );
                     tracing::warn!(duration_ms, error = %err, ?status, "worker run failed");
                     run.duration_ms = Some(duration_ms);
-                    finalize_failed_run(&store, run, &job, status, err).await;
+                    finalize_failed_run(&store, run, &job, status, err, Some(logs)).await;
                 }
             }
         }

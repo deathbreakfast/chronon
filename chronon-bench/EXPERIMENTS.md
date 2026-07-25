@@ -75,7 +75,7 @@ Three tracks — **do not mix metrics**:
 | Track | IDs | Primary metric | Use |
 |-------|-----|----------------|-----|
 | **Tick path** | BM-CH0, CH1, CH3, CH4, BM-CHL* | tick/query p50/p95/p99 ms | Scheduler overhead |
-| **Execution path** | BM-CH5, CH6 | runs/s, enqueue-to-run ms | Script + deployment tax |
+| **Execution path** | BM-CH5, CH6, BM-CH-RETRY | runs/s, enqueue-to-run ms, retry enqueue ms | Script + deployment + retry tax |
 | **Claim capacity** | BM-CH7, BM-CH7D | `claim_ops_per_sec` | Worker claim / production drain ceiling |
 
 ---
@@ -91,6 +91,7 @@ Three tracks — **do not mix metrics**:
 | **BM-CH4** | Leader failover | time-to-first-tick | ≤ 2× tick interval | aws-t3.medium PASS (331 ms p95) |
 | **BM-CH5** | Noop script execution | runs/s vs tokio baseline | Document overhead | aws-t3.medium PASS (~3.6/s) |
 | **BM-CH6** | Embedded vs coordinator-worker | enqueue-to-run p95 delta | Documented budget | aws-t3.medium PASS (+32 ms) |
+| **BM-CH-RETRY** | Fail → schedule next retry (`finalize_failed_run`) | enqueue-to-run ms (reuse field) | Document p95; mem lab | registered (gluon_cicd_01 Phase D) |
 | **BM-CH7** | Worker claim throughput (Track A) | `claim_ops_per_sec` vs W | err < 0.1%; hybrid gate | aws-t3.medium PASS (~1k/s); CH7-D0/D3 + D5 on `aws-c6i-large` |
 | **BM-CH7D** | Production worker drain (Track B) | `claim_ops_per_sec` vs Wn | drain completes | aws-c6i-large PASS (~630/s single cell, flat across Wn; D5 T7) |
 | **BM-CHL0** | Sustained 10 due jobs/tick | p99, error rate | err < 0.1% | aws-t3.medium PASS |
@@ -162,7 +163,7 @@ postgres-redis:  S0 (CH7 primary) → S4 → A/B vs postgres S0 → S2 (CHL2–3
 | `durable-floor` | BM-CH0, BM-CH1 | sqlite, postgres, postgres-redis | Storage tax |
 | `claim-capacity` | BM-CH7 | postgres, postgres-redis | Hybrid gate |
 | `scheduler-sustain` | BM-CHL0–3 | all | Due jobs/tick ladder |
-| `execution-path` | BM-CH5, BM-CH6 | all | E2E runs + deployment |
+| `execution-path` | BM-CH5, BM-CH6, BM-CH-RETRY | all | E2E runs + deployment + retry |
 | `resilience` | BM-CH3, BM-CH4 | postgres, postgres-redis | Failover |
 | `telemetry-tax` | BM-CH0 | mem | Console overhead |
 | `cost-tier` | BM-CHL1 | mem vs postgres | TCO anchor |
@@ -185,6 +186,7 @@ cargo run -p chronon-bench -- matrix --slice durable-floor --storage postgres \
 | RQ5 | Leader failover | BM-CH4 |
 | RQ6 | Script execution overhead | BM-CH5 |
 | RQ7 | Deployment tax | BM-CH6 S6 |
+| RQ7b | Retry enqueue latency after failure | BM-CH-RETRY |
 | RQ8 | Claim throughput | BM-CH7 S0, S4 |
 | RQ9 | Sustained tick ceiling | BM-CHL S2 |
 | RQ10 | Hybrid ROI | BM-CH7 postgres vs postgres-redis |

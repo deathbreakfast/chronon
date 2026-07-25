@@ -17,7 +17,7 @@ pub const MATRIX_SLICES: &[&str] = &[
 /// All registered benchmark experiment ids (BM-CH* and BM-CHL*).
 pub const ALL_EXPERIMENT_IDS: &[&str] = &[
     "bm-ch0", "bm-ch1", "bm-ch2", "bm-ch3", "bm-ch4", "bm-ch5", "bm-ch6", "bm-ch7", "bm-ch7d",
-    "bm-chl0", "bm-chl1", "bm-chl2", "bm-chl3",
+    "bm-ch-retry", "bm-chl0", "bm-chl1", "bm-chl2", "bm-chl3",
 ];
 
 /// Resolved plan for one benchmark run (id plus default iteration counts).
@@ -82,6 +82,11 @@ pub fn resolve_experiment(
             default_ops: ops.unwrap_or(32),
             default_jobs: Some(jobs.unwrap_or(100_000)),
         },
+        "bm-ch-retry" => ExperimentPlan {
+            id: id.into(),
+            default_ops: ops.unwrap_or(200),
+            default_jobs: None,
+        },
         "bm-chl0" => ExperimentPlan {
             id: id.into(),
             default_ops: ops.unwrap_or(500),
@@ -117,7 +122,7 @@ pub fn subset_experiments(slice: &str) -> Result<Vec<&'static str>> {
         "durable-floor" => vec!["bm-ch0", "bm-ch1"],
         "claim-capacity" => vec!["bm-ch7", "bm-ch7d"],
         "scheduler-sustain" => vec!["bm-chl0", "bm-chl1", "bm-chl2", "bm-chl3"],
-        "execution-path" => vec!["bm-ch5", "bm-ch6"],
+        "execution-path" => vec!["bm-ch5", "bm-ch6", "bm-ch-retry"],
         "resilience" => vec!["bm-ch3", "bm-ch4"],
         "telemetry-tax" => vec!["bm-ch0"],
         "cost-tier" => vec!["bm-chl1"],

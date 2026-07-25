@@ -17,18 +17,30 @@
 //! - [`ConsoleSink`] — stderr output for development (also emits `tracing` events when a
 //!   subscriber is installed)
 //! - [`RecordingSink`] — in-memory capture for test assertions
+//! - [`ChrononLogCapture`] — per-run tracing buffer for `stdout_text` / `stderr_text`
 //!
 //! # Metric names
 //!
 //! Stable counters include `chronon_scheduler_ticks`, `chronon_runs_started`,
 //! `chronon_runs_completed`, and `chronon_runs_failed`. Label keys are not validated;
 //! keep names stable for dashboard compatibility.
+//!
+//! # Concern → API
+//!
+//! | Concern | API |
+//! |---------|-----|
+//! | Counters / gauges / events | [`TelemetrySink`] |
+//! | Per-run log capture (flush on fail) | [`ChrononLogCapture`], [`CaptureScope`], [`CapturedLogs`] |
 
 mod console;
+mod log_capture;
 mod noop;
 mod recording;
 
 pub use console::ConsoleSink;
+pub use log_capture::{
+    CaptureScope, CapturedLogs, ChrononLogCapture, DEFAULT_MAX_CAPTURE_BYTES,
+};
 pub use noop::NoOpSink;
 pub use recording::{RecordedCounter, RecordedEvent, RecordedGauge, RecordingSink};
 

@@ -10,6 +10,7 @@ mod ch6_deploy;
 mod ch7_claim;
 pub mod ch7_common;
 mod ch7_daemon;
+mod ch_retry;
 mod chl_load;
 
 use anyhow::Result;
@@ -51,6 +52,7 @@ pub async fn run_experiment(ctx: &RunContext) -> Result<BenchReport> {
         "bm-ch6" => ch6_deploy::run(ctx).await?,
         "bm-ch7" => ch7_claim::run(ctx).await?,
         "bm-ch7d" => ch7_daemon::run(ctx).await?,
+        "bm-ch-retry" => ch_retry::run(ctx).await?,
         id if id.starts_with("bm-chl") => chl_load::run(ctx).await?,
         other => anyhow::bail!("no runner for {other}"),
     };

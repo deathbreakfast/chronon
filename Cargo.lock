@@ -363,7 +363,9 @@ dependencies = [
  "anyhow",
  "chrono",
  "chrono-tz",
+ "chronon-backend-mem",
  "chronon-core",
+ "chronon-runtime",
  "chronon-scheduler",
  "chronon-telemetry",
  "chronon-testkit",
@@ -417,6 +419,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uf-quark",
 ]
 
@@ -470,6 +473,7 @@ version = "0.1.1"
 dependencies = [
  "parking_lot",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

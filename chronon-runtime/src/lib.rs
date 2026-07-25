@@ -29,4 +29,5 @@ mod worker;
 pub use builder::{builder, ChrononBuilder, DeploymentShape};
 pub use coordinator_service::CoordinatorService;
 pub use remote_client::{resolve_remote_base_url, JobSummary, RemoteCoordinatorClient};
+pub use retry::finalize_failed_run;
 pub use runtime::Chronon;

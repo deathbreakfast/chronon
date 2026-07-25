@@ -71,6 +71,8 @@ Benchmarks use synthetic noop scripts only (product-agnostic).
 | RQ4 | Does partition churn delay ticks beyond 2× baseline? | BM-CH3 |
 | RQ5 | Is leader failover recovery ≤ 2× tick interval? | BM-CH4 |
 | RQ6 | What is noop script throughput vs raw tokio spawn? | BM-CH5 |
+| RQ7b | What is fail→retry enqueue latency (`finalize_failed_run`)? | BM-CH-RETRY |
+
 | RQ7 | What is embedded vs coordinator–worker enqueue-to-run delta? | BM-CH6 S6 |
 | RQ8 | What is `claim_next_queued` throughput vs worker count W? | BM-CH7 S0, S4 |
 | RQ9 | What due jobs/tick can the scheduler sustain with err < 0.1%? | BM-CHL S2 |

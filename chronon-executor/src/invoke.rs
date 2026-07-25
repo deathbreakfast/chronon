@@ -3,8 +3,12 @@
 use std::sync::Arc;
 
 use chronon_core::{ChrononError, ContextFactory, Result};
-use chronon_telemetry::TelemetrySink;
+use chronon_telemetry::{
+    CapturedLogs, ChrononLogCapture, TelemetrySink, DEFAULT_MAX_CAPTURE_BYTES,
+};
 use serde_json::Value;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::Registry;
 
 use crate::registry::ScriptRegistry;
 
@@ -28,6 +32,15 @@ pub struct ExecuteScriptRequest<'a> {
     pub run_id: &'a str,
 }
 
+/// Outcome of [`execute_script`]: handler result plus captured tracing text.
+#[derive(Debug)]
+pub struct ExecuteScriptOutcome {
+    /// Handler / lookup / context-build result.
+    pub result: Result<()>,
+    /// Tracing capture for persistence on the run row (including on failure).
+    pub logs: CapturedLogs,
+}
+
 fn record_executor_error(
     telemetry: &Arc<dyn TelemetrySink>,
     job_name: &str,
@@ -48,7 +61,11 @@ fn record_executor_error(
     );
 }
 
-/// Execute a script synchronously.
+/// Execute a script and capture tracing output for the run record.
+///
+/// Installs a scoped [`ChrononLogCapture`] dispatcher for the invoke so info/warn/error
+/// events are buffered. Logs are returned on **both** success and failure (failure also
+/// ensures `stderr_text` includes the error message).
 #[tracing::instrument(
     skip(req),
     fields(
@@ -57,7 +74,7 @@ fn record_executor_error(
         run_id = %req.run_id,
     )
 )]
-pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> Result<()> {
+pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> ExecuteScriptOutcome {
     let ExecuteScriptRequest {
         registry,
         context_factory,
@@ -69,6 +86,44 @@ pub async fn execute_script(req: ExecuteScriptRequest<'_>) -> Result<()> {
         run_id,
     } = req;
 
+    let capture = ChrononLogCapture::new(DEFAULT_MAX_CAPTURE_BYTES);
+    let subscriber = Registry::default().with(capture.clone());
+    let dispatch = tracing::dispatcher::Dispatch::new(subscriber);
+    let _guard = tracing::dispatcher::set_default(&dispatch);
+    let scope = capture.enter();
+
+    let result = invoke_inner(
+        registry,
+        context_factory,
+        telemetry,
+        script_name,
+        actor_json,
+        params_json,
+        job_name,
+        run_id,
+    )
+    .await;
+
+    let mut logs = scope.finish();
+    drop(_guard);
+
+    if let Err(ref e) = result {
+        logs.ensure_stderr_message(&e.to_string());
+    }
+
+    ExecuteScriptOutcome { result, logs }
+}
+
+async fn invoke_inner(
+    registry: &ScriptRegistry,
+    context_factory: &Arc<dyn ContextFactory>,
+    telemetry: &Arc<dyn TelemetrySink>,
+    script_name: &str,
+    actor_json: &Value,
+    params_json: Value,
+    job_name: &str,
+    run_id: &str,
+) -> Result<()> {
     let descriptor = registry.get_or_err(script_name).inspect_err(|e| {
         record_executor_error(
             telemetry,
@@ -134,6 +189,8 @@ fn is_likely_param_error(message: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
     use super::*;
     use crate::descriptor::ScriptDescriptor;
     use chronon_core::{NoOpContextFactory, Result, ScriptContext};
@@ -145,7 +202,20 @@ mod tests {
         _ctx: Box<dyn ScriptContext>,
         _params: Value,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async {
+            tracing::info!("noop ran");
+            Ok(())
+        })
+    }
+
+    fn fail_invoke(
+        _ctx: Box<dyn ScriptContext>,
+        _params: Value,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+        Box::pin(async {
+            tracing::warn!("about to fail");
+            Err(ChrononError::Internal("probe failure".into()))
+        })
     }
 
     #[tokio::test]
@@ -155,7 +225,7 @@ mod tests {
         let factory: Arc<dyn chronon_core::ContextFactory> = Arc::new(NoOpContextFactory);
         let telemetry: Arc<dyn chronon_telemetry::TelemetrySink> =
             Arc::new(chronon_telemetry::NoOpSink);
-        let result = execute_script(ExecuteScriptRequest {
+        let outcome = execute_script(ExecuteScriptRequest {
             registry: &registry,
             context_factory: &factory,
             telemetry: &telemetry,
@@ -166,6 +236,45 @@ mod tests {
             run_id: "run-1",
         })
         .await;
-        assert!(result.is_ok());
+        assert!(outcome.result.is_ok());
+        assert!(
+            outcome
+                .logs
+                .stdout_text
+                .as_deref()
+                .is_some_and(|s| s.contains("noop ran")),
+            "stdout={:?}",
+            outcome.logs.stdout_text
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_script_still_returns_captured_logs() {
+        let mut registry = ScriptRegistry::new();
+        registry.register(&ScriptDescriptor::new("fail_script", fail_invoke));
+        let factory: Arc<dyn chronon_core::ContextFactory> = Arc::new(NoOpContextFactory);
+        let telemetry: Arc<dyn chronon_telemetry::TelemetrySink> =
+            Arc::new(chronon_telemetry::NoOpSink);
+        let outcome = execute_script(ExecuteScriptRequest {
+            registry: &registry,
+            context_factory: &factory,
+            telemetry: &telemetry,
+            script_name: "fail_script",
+            actor_json: &Value::Null,
+            params_json: Value::Object(serde_json::Map::default()),
+            job_name: "job",
+            run_id: "run-fail",
+        })
+        .await;
+        assert!(outcome.result.is_err());
+        assert!(
+            outcome
+                .logs
+                .stderr_text
+                .as_deref()
+                .is_some_and(|s| s.contains("about to fail") || s.contains("probe failure")),
+            "stderr={:?}",
+            outcome.logs.stderr_text
+        );
     }
 }

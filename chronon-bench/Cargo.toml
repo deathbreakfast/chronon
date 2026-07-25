@@ -20,7 +20,9 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+chronon-backend-mem = { workspace = true }
 chronon-core = { workspace = true }
+chronon-runtime = { workspace = true }
 chronon-scheduler = { workspace = true }
 chronon-telemetry = { workspace = true }
 chronon-testkit = { workspace = true }

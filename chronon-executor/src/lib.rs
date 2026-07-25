@@ -8,6 +8,16 @@
 //! - **Register handlers** — [`ScriptRegistry`], link-time inventory via `#[chronon::script]`
 //! - **Dispatch runs** — [`Executor::spawn_run`], [`execute_script`]
 //! - **Observe lifecycle** — [`ExecutorEvent`]
+//! - **Per-run log capture** — [`execute_script`] returns [`ExecuteScriptOutcome::logs`]
+//!   ([`chronon_telemetry::ChrononLogCapture`]); runtime persists on success **and** failure
+//!
+//! # Concern → API
+//!
+//! | Concern | API |
+//! |---------|-----|
+//! | Invoke + capture logs | [`execute_script`] → [`ExecuteScriptOutcome`] |
+//! | Async dispatch | [`Executor::spawn_run`] |
+//! | Lifecycle to runtime | [`ExecutorEvent`] (includes [`CapturedLogs`](chronon_telemetry::CapturedLogs)) |
 //!
 //! # Notes
 //!
@@ -19,14 +29,14 @@ mod invoke;
 mod registry;
 
 pub use descriptor::{InvokeFn, ScriptDescriptor};
-pub use invoke::{execute_script, ExecuteScriptRequest};
+pub use invoke::{execute_script, ExecuteScriptOutcome, ExecuteScriptRequest};
 pub use registry::{ScriptDescriptorRef, ScriptRegistry};
 
 use std::sync::Arc;
 
 use chrono::Utc;
 use chronon_core::{ContextFactory, Job, Run};
-use chronon_telemetry::TelemetrySink;
+use chronon_telemetry::{CapturedLogs, TelemetrySink};
 use tokio::sync::mpsc;
 use tracing::Instrument;
 
@@ -46,6 +56,8 @@ pub enum ExecutorEvent {
         run_id: String,
         /// Wall-clock duration from spawn to handler completion, in milliseconds.
         duration_ms: i64,
+        /// Captured tracing text for `stdout_text` / `stderr_text`.
+        logs: CapturedLogs,
     },
     /// Handler returned an error or context build failed.
     RunFailed {
@@ -53,6 +65,8 @@ pub enum ExecutorEvent {
         run_id: String,
         /// Display-formatted error message for logs and persistence.
         error: String,
+        /// Captured tracing text (flushed even on failure).
+        logs: CapturedLogs,
     },
 }
 
@@ -135,7 +149,7 @@ impl Executor {
                 tracing::info!("run started");
 
                 let started = Utc::now();
-                let result = invoke::execute_script(invoke::ExecuteScriptRequest {
+                let outcome = invoke::execute_script(invoke::ExecuteScriptRequest {
                     registry: &registry,
                     context_factory: &context_factory,
                     telemetry: &telemetry,
@@ -148,11 +162,12 @@ impl Executor {
                 .await;
 
                 let duration_ms = (Utc::now() - started).num_milliseconds();
-                match result {
+                match outcome.result {
                     Ok(()) => {
                         let _ = event_tx.send(ExecutorEvent::RunCompleted {
                             run_id: run_id.clone(),
                             duration_ms,
+                            logs: outcome.logs,
                         });
                         telemetry.record_counter(
                             "chronon_runs_completed",
@@ -166,6 +181,7 @@ impl Executor {
                         let _ = event_tx.send(ExecutorEvent::RunFailed {
                             run_id: run_id.clone(),
                             error: error_msg.clone(),
+                            logs: outcome.logs,
                         });
                         telemetry.record_counter(
                             "chronon_runs_failed",
@@ -191,6 +207,8 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
     use super::*;
     use chronon_core::{NoOpContextFactory, Result, ScriptContext};
     use serde_json::{json, Value};
