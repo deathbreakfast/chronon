@@ -17,7 +17,7 @@
 //! |---------|-----|
 //! | Invoke + capture logs | [`execute_script`] → [`ExecuteScriptOutcome`] |
 //! | Async dispatch | [`Executor::spawn_run`] |
-//! | Lifecycle to runtime | [`ExecutorEvent`] (includes [`CapturedLogs`](chronon_telemetry::CapturedLogs)) |
+//! | Lifecycle to runtime | [`ExecutorEvent`] (includes [`CapturedLogs`]) |
 //!
 //! # Notes
 //!

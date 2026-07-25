@@ -163,7 +163,8 @@ struct JobActionRequest {
 /// # }
 /// ```
 ///
-/// Runnable API mount sketch: `cargo run -p uf-chronon --example axum_host --features mem,axum`.
+/// Runnable: `cargo run -p uf-chronon --example remote_http_client --features mem,axum`
+/// (API mount sketches: `axum_host`, `axum_auth_wrap`).
 pub struct RemoteCoordinatorClient {
     base_url: String,
     client: reqwest::Client,

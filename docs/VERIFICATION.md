@@ -50,6 +50,7 @@ cargo run -p uf-chronon --example postgres_boot --features postgres
 cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis
 cargo run -p uf-chronon --example axum_host --features mem,axum
 cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum
+cargo run -p uf-chronon --example remote_http_client --features mem,axum
 # Build-only for long-running split daemons (do not leave running in CI)
 cargo build -p uf-chronon --example sqlite_coordinator_daemon --features sqlite
 cargo build -p uf-chronon --example sqlite_worker_daemon --features sqlite
@@ -66,24 +67,16 @@ cargo run -p chronon-bench -- run \
 
 ## Public crate examples
 
+Canonical path (multi-worker recipes: [`chronon/README.md`](../chronon/README.md#how-to-run-examples)):
+
 | Example | Topology | Features | Command |
 |---------|----------|----------|---------|
-| `script_macro` | Embedded | `mem` | `cargo run -p uf-chronon --example script_macro --features mem` |
-| `script_handle_job` | Embedded | `mem` | `cargo run -p uf-chronon --example script_handle_job --features mem` |
-| `run_now` | Embedded | `mem` | `cargo run -p uf-chronon --example run_now --features mem` |
-| `embedded_tick` | Embedded | `mem` | `cargo run -p uf-chronon --example embedded_tick --features mem` |
-| `store_router_boot` | Embedded | `mem` | `cargo run -p uf-chronon --example store_router_boot --features mem` |
 | `sqlite_boot` | Embedded | `sqlite` | `cargo run -p uf-chronon --example sqlite_boot --features sqlite` |
-| `postgres_boot` | Embedded | `postgres` | `cargo run -p uf-chronon --example postgres_boot --features postgres` |
-| `postgres_redis_boot` | Embedded | `postgres`, `redis` | `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis` |
-| `axum_host` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_host --features mem,axum` |
-| `axum_auth_wrap` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum` |
-| `sqlite_coordinator_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite` |
-| `sqlite_worker_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite` |
-| `postgres_coordinator_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_coordinator_daemon --features postgres` |
-| `postgres_worker_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_worker_daemon --features postgres` |
-| `coordinator_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis` |
-| `worker_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example worker_daemon --features postgres,redis` |
+| `sqlite_coordinator_daemon` / `sqlite_worker_daemon` | Coordinator–worker (local) | `sqlite` | see chronon README runbook |
+| `coordinator_daemon` / `worker_daemon` | Coordinator–worker (Postgres+Redis) | `postgres`, `redis` | see chronon README runbook |
+| `remote_http_client` | Remote HTTP client | `mem`, `axum` | `cargo run -p uf-chronon --example remote_http_client --features mem,axum` |
+
+Other examples: `script_macro`, `script_handle_job`, `run_now`, `embedded_tick`, `store_router_boot`, `postgres_boot`, `postgres_redis_boot`, `axum_host`, `axum_auth_wrap`, `postgres_coordinator_daemon`, `postgres_worker_daemon`.
 
 ## Security hardening checks (axum / runtime / sql-common)
 

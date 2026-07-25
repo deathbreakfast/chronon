@@ -123,40 +123,30 @@ cargo run -p uf-chronon --example script_macro --features mem
 
 Enable features explicitly — the public crate ships with **no default features** (`default = []`). See [Cargo features](#cargo-features) below.
 
-### Durable storage (SQLite)
+### Examples (canonical path)
 
-For file-backed persistence without external services (`CHRONON_SQLITE_PATH`, default `/tmp/chronon-example.db`):
-
-```toml
-chronon = { package = "uf-chronon", version = "0.1", features = ["sqlite"] }
-```
+Full multi-worker runbooks: [`chronon/README.md` — How to run examples](chronon/README.md#how-to-run-examples).
 
 ```bash
+# 1. Embedded (SQLite file)
 cargo run -p uf-chronon --example sqlite_boot --features sqlite
-```
 
-### Coordinator–worker (split processes)
-
-Same-host SQLite (shared file) or Postgres ± Redis. Production claim path uses Postgres + Redis:
-
-```bash
-# SQLite same-host
+# 2. Coordinator–worker local (1 coordinator + 2 workers — separate terminals)
 export CHRONON_SQLITE_PATH=/tmp/chronon-split.db
-cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite &
-CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite
+# CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+# CHRONON_INSTANCE_ID=worker-b cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
 
-# Postgres + Redis
-export CHRONON_POSTGRES_URL=postgres://user:pass@localhost/chronon
-export CHRONON_REDIS_URL=redis://127.0.0.1:6379
-cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis &
-CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+# 3. Remote HTTP client (no local loops)
+cargo run -p uf-chronon --example remote_http_client --features mem,axum
 ```
 
-See [`chronon-backend-sqlite/README.md`](chronon-backend-sqlite/README.md); for Postgres / Redis see [`chronon-backend-postgres`](chronon-backend-postgres/README.md) and [`chronon-backend-redis`](chronon-backend-redis/README.md).
+Production split uses Postgres + Redis (`coordinator_daemon` / `worker_daemon`) — see the chronon README runbook.
 
 API details: [`chronon/README.md`](chronon/README.md) and `cargo doc -p uf-chronon --all-features --open`
 ([Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
-[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split)).
+[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split) /
+[Remote HTTP client](https://docs.rs/uf-chronon/latest/chronon/index.html#remote-http-client)).
 
 ## Cargo features
 

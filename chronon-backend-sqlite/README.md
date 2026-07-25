@@ -24,15 +24,20 @@ let chronon = ChrononBuilder::new()
     .build()?;
 ```
 
-Runnable examples:
+Runnable examples (full runbook: [`chronon/README.md`](../chronon/README.md#how-to-run-examples)):
 
 ```bash
-# Embedded (file-backed; set CHRONON_SQLITE_PATH or default /tmp/chronon-example.db)
+# Embedded (standalone)
 cargo run -p uf-chronon --example sqlite_boot --features sqlite
 
-# Coordinator–worker same-host split (shared CHRONON_SQLITE_PATH)
-cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite &
+# Coordinator–worker same-host — shared path; coordinator first; unique worker ids
+export CHRONON_SQLITE_PATH=/tmp/chronon-split.db
+# Terminal 1
+cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite
+# Terminal 2
 CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+# Terminal 3
+CHRONON_INSTANCE_ID=worker-b cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
 ```
 
 Topology docs: [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /

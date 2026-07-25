@@ -9,6 +9,7 @@ use chronon::prelude::*;
 use chronon_backend_mem::InMemorySchedulerStore;
 
 #[chronon::script(name = "nightly_cleanup")]
+#[allow(clippy::unused_async)] // script handlers are always async
 async fn nightly_cleanup(ctx: Box<dyn ScriptContext>, retention_days: u32) -> chronon::Result<()> {
     let _ = (ctx.label(), retention_days);
     Ok(())

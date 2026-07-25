@@ -12,6 +12,7 @@ use chronon_backend_mem::InMemorySchedulerStore;
 use chronon_core::models::ScheduleKind;
 
 #[chronon::script(name = "tick_demo")]
+#[allow(clippy::unused_async)] // script handlers are always async
 async fn tick_demo(ctx: Box<dyn ScriptContext>) -> chronon::Result<()> {
     let _ = ctx.label();
     Ok(())

@@ -117,9 +117,9 @@ pub const API_PREFIX: &str = "/api/chronon";
 /// ```
 ///
 /// Runnable:
-/// `cargo run -p uf-chronon --example axum_host --features mem,axum`
-/// and
-/// `cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum`.
+/// `cargo run -p uf-chronon --example axum_host --features mem,axum`,
+/// `axum_auth_wrap`, and
+/// `remote_http_client` (client against a nested router).
 pub fn chronon_router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,

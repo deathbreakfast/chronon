@@ -206,6 +206,9 @@
 //! let _run_id = client.run_now(&job.job_id).await?;
 //! ```
 //!
+//! Runnable end-to-end demo (short-lived mem host + client):
+//! `cargo run -p uf-chronon --example remote_http_client --features mem,axum`.
+//!
 //! Set `CHRONON_REMOTE_BASE_URL` for [`resolve_remote_base_url`]. Timeout:
 //! `CHRONON_REMOTE_HTTP_TIMEOUT_MS` (default 3000).
 //!
@@ -355,29 +358,22 @@
 //!
 //! # Runnable examples
 //!
+//! Canonical path (see crate README **How to run examples** for multi-worker recipes):
+//!
 //! | Example | Topology | Features |
 //! |---------|----------|----------|
-//! | `script_macro` | Embedded | `mem` |
-//! | `script_handle_job` | Embedded | `mem` |
-//! | `run_now` | Embedded | `mem` |
-//! | `embedded_tick` | Embedded | `mem` |
-//! | `store_router_boot` | Embedded | `mem` |
 //! | `sqlite_boot` | Embedded | `sqlite` |
-//! | `postgres_boot` | Embedded | `postgres` |
-//! | `postgres_redis_boot` | Embedded | `postgres,redis` |
-//! | `axum_host` | Embedded + HTTP | `mem,axum` |
-//! | `axum_auth_wrap` | Embedded + HTTP + host auth demo | `mem,axum` |
-//! | `sqlite_coordinator_daemon` | Coordinator–worker (SQLite) | `sqlite` |
-//! | `sqlite_worker_daemon` | Coordinator–worker (SQLite) | `sqlite` |
-//! | `postgres_coordinator_daemon` | Coordinator–worker (Postgres) | `postgres` |
-//! | `postgres_worker_daemon` | Coordinator–worker (Postgres) | `postgres` |
-//! | `coordinator_daemon` | Coordinator–worker (Postgres+Redis) | `postgres,redis` |
-//! | `worker_daemon` | Coordinator–worker (Postgres+Redis) | `postgres,redis` |
+//! | `sqlite_coordinator_daemon` / `sqlite_worker_daemon` | Coordinator–worker (local) | `sqlite` |
+//! | `coordinator_daemon` / `worker_daemon` | Coordinator–worker (Postgres+Redis) | `postgres,redis` |
+//! | `remote_http_client` | Remote HTTP client | `mem,axum` |
+//!
+//! Other examples: `script_macro`, `script_handle_job`, `run_now`, `embedded_tick`,
+//! `store_router_boot`, `postgres_boot`, `postgres_redis_boot`, `axum_host`, `axum_auth_wrap`,
+//! `postgres_coordinator_daemon`, `postgres_worker_daemon`.
 //!
 //! ```bash
-//! cargo run -p uf-chronon --example script_handle_job --features mem
-//! cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis
-//! cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+//! cargo run -p uf-chronon --example sqlite_boot --features sqlite
+//! cargo run -p uf-chronon --example remote_http_client --features mem,axum
 //! ```
 
 pub use chronon_macros::script;

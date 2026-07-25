@@ -51,7 +51,7 @@ chronon-backend-mem = { workspace = true }
 chronon-backend-sqlite = { workspace = true }
 chronon-backend-postgres = { workspace = true }
 chronon-backend-redis = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["net"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
@@ -86,6 +86,10 @@ required-features = ["mem", "axum"]
 
 [[example]]
 name = "axum_auth_wrap"
+required-features = ["mem", "axum"]
+
+[[example]]
+name = "remote_http_client"
 required-features = ["mem", "axum"]
 
 [[example]]

@@ -112,7 +112,7 @@ async fn main() -> chronon::Result<()> {
     let parsed: ApiResponse<Vec<ScriptResponse>> = serde_json::from_slice(&body)
         .map_err(|e| chronon::ChrononError::Internal(e.to_string()))?;
     assert!(parsed.success);
-    assert_eq!(parsed.data.as_ref().map(|d| d.len()), Some(1));
+    assert_eq!(parsed.data.as_ref().map(std::vec::Vec::len), Some(1));
 
     eprintln!(
         "Chronon API at {API_PREFIX} — unauthenticated → 401, Bearer demo token → listed 1 script"

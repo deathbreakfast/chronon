@@ -51,26 +51,86 @@ Settings merge in this order (explicit builder values win over environment defau
 
 Builder `.tick_interval_ms()` overrides `CHRONON_TICK_INTERVAL_MS`. Partition count and lease TTLs are read from the environment only — see `chronon-scheduler` rustdoc for the full env-var table.
 
-## Examples
+## How to run examples
 
-| Example | Topology | Features | Command |
-|---------|----------|----------|---------|
-| `script_macro` | Embedded | `mem` | `cargo run -p uf-chronon --example script_macro --features mem` |
-| `script_handle_job` | Embedded | `mem` | `cargo run -p uf-chronon --example script_handle_job --features mem` |
-| `run_now` | Embedded | `mem` | `cargo run -p uf-chronon --example run_now --features mem` |
-| `embedded_tick` | Embedded | `mem` | `cargo run -p uf-chronon --example embedded_tick --features mem` |
-| `store_router_boot` | Embedded | `mem` | `cargo run -p uf-chronon --example store_router_boot --features mem` |
-| `sqlite_boot` | Embedded | `sqlite` | `cargo run -p uf-chronon --example sqlite_boot --features sqlite` |
-| `postgres_boot` | Embedded | `postgres` | `cargo run -p uf-chronon --example postgres_boot --features postgres` |
-| `postgres_redis_boot` | Embedded | `postgres`, `redis` | `cargo run -p uf-chronon --example postgres_redis_boot --features postgres,redis` |
-| `axum_host` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_host --features mem,axum` |
-| `axum_auth_wrap` | Embedded + HTTP | `mem`, `axum` | `cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum` |
-| `sqlite_coordinator_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite` |
-| `sqlite_worker_daemon` | Coordinator–worker | `sqlite` | `cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite` |
-| `postgres_coordinator_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_coordinator_daemon --features postgres` |
-| `postgres_worker_daemon` | Coordinator–worker | `postgres` | `cargo run -p uf-chronon --example postgres_worker_daemon --features postgres` |
-| `coordinator_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis` |
-| `worker_daemon` | Coordinator–worker | `postgres`, `redis` | `cargo run -p uf-chronon --example worker_daemon --features postgres,redis` |
+Canonical teaching path (start here). Topology docs:
+[Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
+[Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split) /
+[Remote HTTP client](https://docs.rs/uf-chronon/latest/chronon/index.html#remote-http-client).
+
+### 1. Embedded — `sqlite_boot` (standalone)
+
+One process, file-backed store. No external services.
+
+```bash
+cargo run -p uf-chronon --example sqlite_boot --features sqlite
+# optional: CHRONON_SQLITE_PATH=:memory:  or a custom file path
+# default path: /tmp/chronon-example.db
+```
+
+Success: stderr prints `Chronon booted with SQLite store (…)`.
+
+### 2. Coordinator–worker (multi-process — run as a set)
+
+Coordinator and workers share one store. They are **not** useful alone.
+
+| Rule | Detail |
+|------|--------|
+| Shared env | Same `CHRONON_SQLITE_PATH` or same Postgres/Redis URLs on every process |
+| Start order | Coordinator first (`init_partitions`), then workers |
+| Workers | Each needs a unique `CHRONON_INSTANCE_ID`; optional `CHRONON_WORKER_POOL` (default `general`) |
+| Scripts | Execute on **workers** only; example daemons register `daemon-noop` |
+
+**Local SQLite** (no Postgres/Redis) — 1 coordinator + 2 workers:
+
+```bash
+export CHRONON_SQLITE_PATH=/tmp/chronon-split.db
+
+# Terminal 1 — coordinator
+cargo run -p uf-chronon --example sqlite_coordinator_daemon --features sqlite
+
+# Terminal 2 — worker A
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+
+# Terminal 3 — worker B
+CHRONON_INSTANCE_ID=worker-b cargo run -p uf-chronon --example sqlite_worker_daemon --features sqlite
+```
+
+**Production claim path (Postgres + Redis)** — same pattern:
+
+```bash
+export CHRONON_POSTGRES_URL=postgres://user:pass@localhost/chronon
+export CHRONON_REDIS_URL=redis://127.0.0.1:6379
+
+# Terminal 1 — coordinator
+cargo run -p uf-chronon --example coordinator_daemon --features postgres,redis
+
+# Terminal 2 / 3 — workers (unique instance ids)
+CHRONON_INSTANCE_ID=worker-a cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+CHRONON_INSTANCE_ID=worker-b cargo run -p uf-chronon --example worker_daemon --features postgres,redis
+```
+
+Stop with Ctrl-C on each process. Real apps link `#[chronon::script]` into worker binaries and use `.auto_registry()`.
+
+### 3. Remote HTTP client — `remote_http_client` (standalone)
+
+App schedules via `RemoteCoordinatorClient` (no local Chronon loops). This demo spins a short-lived mem API host, then upserts + `run_now`.
+
+```bash
+cargo run -p uf-chronon --example remote_http_client --features mem,axum
+```
+
+**Production:** Chronon does not authenticate `/api/chronon/*`. Wrap with host auth — see `axum_auth_wrap` and repository [`SECURITY.md`](../SECURITY.md).
+
+### Other examples
+
+| Example | Topology | Features | Notes |
+|---------|----------|----------|-------|
+| `script_macro`, `script_handle_job`, `run_now`, `embedded_tick` | Embedded | `mem` | API / scheduling demos |
+| `store_router_boot` | Embedded | `mem` | Global store router |
+| `postgres_boot`, `postgres_redis_boot` | Embedded | `postgres` / `postgres,redis` | Store wiring |
+| `axum_host`, `axum_auth_wrap` | Embedded + HTTP | `mem,axum` | Router / Bearer demo |
+| `postgres_coordinator_daemon`, `postgres_worker_daemon` | Coordinator–worker | `postgres` | Postgres-only split |
 
 ## Documentation
 

@@ -12,6 +12,7 @@ use chronon::prelude::*;
 use chronon_backend_mem::InMemorySchedulerStore;
 
 #[chronon::script(name = "manual_probe")]
+#[allow(clippy::unused_async)] // script handlers are always async
 async fn manual_probe(ctx: Box<dyn ScriptContext>) -> chronon::Result<()> {
     let _ = ctx.label();
     Ok(())
