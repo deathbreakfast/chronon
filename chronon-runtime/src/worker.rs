@@ -13,7 +13,7 @@ use chronon_scheduler::{
 use chronon_telemetry::TelemetrySink;
 use tokio::sync::Notify;
 use tokio::time::{sleep, timeout};
-use tracing::Instrument;
+use tracing::{warn, Instrument};
 
 use crate::env::env_flag;
 use crate::retry::finalize_failed_run;
@@ -28,6 +28,16 @@ fn worker_row_id(worker_id: &str) -> String {
         s = "worker".to_string();
     }
     s
+}
+
+async fn warn_update_run(
+    store: &Arc<dyn SchedulerStore>,
+    run: &chronon_core::models::Run,
+    msg: &str,
+) {
+    if let Err(e) = store.update_run(run).await {
+        warn!(run_id = %run.run_id, error = %e, "{msg}");
+    }
 }
 
 async fn worker_slot(
@@ -57,12 +67,12 @@ async fn worker_slot(
 
         let Some(job_id) = run.job_id.clone() else {
             run.fail("missing job_id");
-            let _ = store.update_run(&run).await;
+            warn_update_run(&store, &run, "failed to persist missing job_id failure").await;
             continue;
         };
         let Some(job) = store.get_job(&job_id).await.ok().flatten() else {
             run.fail("job not found");
-            let _ = store.update_run(&run).await;
+            warn_update_run(&store, &run, "failed to persist job-not-found failure").await;
             continue;
         };
 
@@ -80,7 +90,12 @@ async fn worker_slot(
 
             run.start();
             run.status = RunStatus::Running;
-            if store.update_run(&run).await.is_err() {
+            if let Err(e) = store.update_run(&run).await {
+                warn!(
+                    run_id = %run.run_id,
+                    error = %e,
+                    "failed to persist Running status after claim; abandoning run"
+                );
                 return;
             }
 
@@ -157,7 +172,7 @@ async fn worker_slot(
                         1,
                     );
                     tracing::info!(duration_ms, "worker run completed");
-                    let _ = store.update_run(&run).await;
+                    warn_update_run(&store, &run, "failed to persist successful worker run").await;
                 }
                 Err((status, err)) => {
                     telemetry.record_counter(
@@ -190,7 +205,13 @@ async fn heartbeat_worker(store: &Arc<dyn SchedulerStore>, worker_id: &str, pool
         updated_at: now,
     };
     if store.register_worker(&worker).await.is_ok() {
-        let _ = store.heartbeat_worker(&row_id, now).await;
+        if let Err(e) = store.heartbeat_worker(&row_id, now).await {
+            warn!(
+                worker_id = %row_id,
+                error = %e,
+                "failed to heartbeat worker after register"
+            );
+        }
     }
 }
 

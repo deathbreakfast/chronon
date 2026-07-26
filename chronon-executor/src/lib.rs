@@ -23,6 +23,9 @@
 //!
 //! [`Executor::spawn_run`] uses run-level `params_json`, not job defaults. Missing scripts
 //! surface as [`ChrononError::ScriptNotFound`](chronon_core::ChrononError::ScriptNotFound).
+//! Concurrent `spawn_run` work is capped by a semaphore (`CHRONON_EXECUTOR_CONCURRENCY`,
+//! default 4); lifecycle events use a bounded channel (`CHRONON_EVENT_CHANNEL_CAPACITY`,
+//! default 1024).
 
 mod descriptor;
 mod invoke;
@@ -37,8 +40,34 @@ use std::sync::Arc;
 use chrono::Utc;
 use chronon_core::{ContextFactory, Job, Run};
 use chronon_telemetry::{CapturedLogs, TelemetrySink};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tracing::Instrument;
+
+/// Default max in-flight [`Executor::spawn_run`] tasks.
+pub const DEFAULT_EXECUTOR_CONCURRENCY: usize = 4;
+
+/// Default capacity for the executor → runtime lifecycle event channel.
+pub const DEFAULT_EVENT_CHANNEL_CAPACITY: usize = 1024;
+
+/// Reads `CHRONON_EXECUTOR_CONCURRENCY` (default [`DEFAULT_EXECUTOR_CONCURRENCY`]).
+#[must_use]
+pub fn executor_concurrency_from_env() -> usize {
+    std::env::var("CHRONON_EXECUTOR_CONCURRENCY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n >= 1)
+        .unwrap_or(DEFAULT_EXECUTOR_CONCURRENCY)
+}
+
+/// Reads `CHRONON_EVENT_CHANNEL_CAPACITY` (default [`DEFAULT_EVENT_CHANNEL_CAPACITY`]).
+#[must_use]
+pub fn event_channel_capacity_from_env() -> usize {
+    std::env::var("CHRONON_EVENT_CHANNEL_CAPACITY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n >= 1)
+        .unwrap_or(DEFAULT_EVENT_CHANNEL_CAPACITY)
+}
 
 /// Event sent from the executor to the runtime for run status updates.
 ///
@@ -81,32 +110,38 @@ pub struct Executor {
     pub context_factory: Arc<dyn ContextFactory>,
     /// Metrics and structured error events for invoke phases.
     pub telemetry: Arc<dyn TelemetrySink>,
-    event_tx: mpsc::UnboundedSender<ExecutorEvent>,
+    event_tx: mpsc::Sender<ExecutorEvent>,
+    /// Caps concurrent [`Self::spawn_run`] executions.
+    run_slots: Arc<Semaphore>,
 }
 
 impl Executor {
     /// Builds an executor wired to the given registry, factory, telemetry, and event channel.
     ///
     /// The runtime typically clones [`Self::event_sender`] before passing `event_tx` so both
-    /// sides can send lifecycle updates.
+    /// sides can send lifecycle updates. `max_in_flight` bounds concurrent `spawn_run` work
+    /// (use [`executor_concurrency_from_env`] at the builder).
     pub fn new(
         registry: Arc<ScriptRegistry>,
         context_factory: Arc<dyn ContextFactory>,
         telemetry: Arc<dyn TelemetrySink>,
-        event_tx: mpsc::UnboundedSender<ExecutorEvent>,
+        event_tx: mpsc::Sender<ExecutorEvent>,
+        max_in_flight: usize,
     ) -> Self {
+        let slots = max_in_flight.max(1);
         Self {
             registry,
             context_factory,
             telemetry,
             event_tx,
+            run_slots: Arc::new(Semaphore::new(slots)),
         }
     }
 
-    /// Clones the unbounded sender for [`ExecutorEvent`] lifecycle updates.
+    /// Clones the bounded sender for [`ExecutorEvent`] lifecycle updates.
     ///
     /// Used by the runtime to subscribe without holding an [`Executor`] reference.
-    pub fn event_sender(&self) -> mpsc::UnboundedSender<ExecutorEvent> {
+    pub fn event_sender(&self) -> mpsc::Sender<ExecutorEvent> {
         self.event_tx.clone()
     }
 
@@ -117,14 +152,17 @@ impl Executor {
 
     /// Spawn asynchronous execution for one run of the given job.
     ///
-    /// Emits [`ExecutorEvent::RunStarted`] immediately, then invokes the script via
-    /// [`execute_script`]. Uses the run's snapshotted `actor_json` and `params_json`
-    /// (not the live job row) so queued identity cannot change under a worker.
+    /// Acquires a run-slot permit before invoking the script so enqueue cannot start
+    /// unlimited concurrent work. Emits [`ExecutorEvent::RunStarted`] after the slot is
+    /// held, then invokes via [`execute_script`]. Uses the run's snapshotted `actor_json`
+    /// and `params_json` (not the live job row) so queued identity cannot change under a
+    /// worker.
     pub fn spawn_run(&self, job: &Job, run: Run) {
         let registry = Arc::clone(&self.registry);
         let context_factory = Arc::clone(&self.context_factory);
         let telemetry = Arc::clone(&self.telemetry);
         let event_tx = self.event_tx.clone();
+        let run_slots = Arc::clone(&self.run_slots);
 
         let script_name = job.script_name.clone();
         let job_name = job.job_name.clone();
@@ -140,9 +178,27 @@ impl Executor {
         );
         tokio::spawn(
             async move {
-                let _ = event_tx.send(ExecutorEvent::RunStarted {
-                    run_id: run_id.clone(),
-                });
+                let Ok(_permit) = run_slots.acquire_owned().await else {
+                    tracing::warn!(
+                        run_id = %run_id,
+                        "executor run-slot semaphore closed; dropping spawn_run"
+                    );
+                    return;
+                };
+
+                if event_tx
+                    .send(ExecutorEvent::RunStarted {
+                        run_id: run_id.clone(),
+                    })
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!(
+                        run_id = %run_id,
+                        "executor event channel closed on RunStarted"
+                    );
+                    return;
+                }
                 telemetry.record_counter(
                     "chronon_runs_started",
                     &[("script", script_name.as_str()), ("job", job_name.as_str())],
@@ -166,11 +222,20 @@ impl Executor {
                 let duration_ms = (Utc::now() - started).num_milliseconds();
                 match outcome.result {
                     Ok(()) => {
-                        let _ = event_tx.send(ExecutorEvent::RunCompleted {
-                            run_id: run_id.clone(),
-                            duration_ms,
-                            logs: outcome.logs,
-                        });
+                        if event_tx
+                            .send(ExecutorEvent::RunCompleted {
+                                run_id: run_id.clone(),
+                                duration_ms,
+                                logs: outcome.logs,
+                            })
+                            .await
+                            .is_err()
+                        {
+                            tracing::warn!(
+                                run_id = %run_id,
+                                "executor event channel closed on RunCompleted"
+                            );
+                        }
                         telemetry.record_counter(
                             "chronon_runs_completed",
                             &[("script", script_name.as_str()), ("job", job_name.as_str())],
@@ -180,11 +245,20 @@ impl Executor {
                     }
                     Err(e) => {
                         let error_msg = e.to_string();
-                        let _ = event_tx.send(ExecutorEvent::RunFailed {
-                            run_id: run_id.clone(),
-                            error: error_msg.clone(),
-                            logs: outcome.logs,
-                        });
+                        if event_tx
+                            .send(ExecutorEvent::RunFailed {
+                                run_id: run_id.clone(),
+                                error: error_msg.clone(),
+                                logs: outcome.logs,
+                            })
+                            .await
+                            .is_err()
+                        {
+                            tracing::warn!(
+                                run_id = %run_id,
+                                "executor event channel closed on RunFailed"
+                            );
+                        }
                         telemetry.record_counter(
                             "chronon_runs_failed",
                             &[("script", script_name.as_str()), ("job", job_name.as_str())],
@@ -273,12 +347,13 @@ mod tests {
             r.register(&ScriptDescriptor::new("probe", param_probe));
             r
         });
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(16);
         let executor = Executor::new(
             registry,
             Arc::new(NoOpContextFactory),
             Arc::new(chronon_telemetry::NoOpSink),
             tx,
+            4,
         );
 
         let mut job = Job::new("job", "probe");
@@ -307,12 +382,13 @@ mod tests {
             r.register(&ScriptDescriptor::new("actor_probe", actor_probe));
             r
         });
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(16);
         let executor = Executor::new(
             registry,
             Arc::new(RecordingFactory),
             Arc::new(chronon_telemetry::NoOpSink),
             tx,
+            4,
         );
 
         let mut job = Job::new("job", "actor_probe");

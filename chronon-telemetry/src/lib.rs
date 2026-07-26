@@ -14,8 +14,7 @@
 //! # Sinks
 //!
 //! - [`NoOpSink`] — default discard sink
-//! - [`ConsoleSink`] — stderr output for development (also emits `tracing` events when a
-//!   subscriber is installed)
+//! - [`ConsoleSink`] — tracing-based development sink (target `chronon_telemetry`)
 //! - [`RecordingSink`] — in-memory capture for test assertions
 //! - [`ChrononLogCapture`] — per-run tracing buffer for `stdout_text` / `stderr_text`
 //!

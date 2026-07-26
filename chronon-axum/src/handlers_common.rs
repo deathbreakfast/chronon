@@ -49,9 +49,9 @@ pub fn chronon_status(err: &ChrononError) -> StatusCode {
         | ChrononError::ParamError(_)
         | ChrononError::Identity(_) => StatusCode::BAD_REQUEST,
         ChrononError::ScriptMismatch { .. } => StatusCode::CONFLICT,
-        ChrononError::StorageError { .. } | ChrononError::Internal(_) => {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+        ChrononError::StorageError { .. }
+        | ChrononError::Internal(_)
+        | ChrononError::InternalSource { .. } => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

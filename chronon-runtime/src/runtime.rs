@@ -56,7 +56,7 @@ pub struct Chronon {
     /// Deployment shape selected at build time.
     pub deployment: DeploymentShape,
     shutdown: Arc<Notify>,
-    event_rx: Option<tokio::sync::mpsc::UnboundedReceiver<chronon_executor::ExecutorEvent>>,
+    event_rx: Option<tokio::sync::mpsc::Receiver<chronon_executor::ExecutorEvent>>,
 }
 
 impl Chronon {
@@ -66,7 +66,7 @@ impl Chronon {
         executor: Arc<Executor>,
         deployment: DeploymentShape,
         shutdown: Arc<Notify>,
-        event_rx: tokio::sync::mpsc::UnboundedReceiver<chronon_executor::ExecutorEvent>,
+        event_rx: tokio::sync::mpsc::Receiver<chronon_executor::ExecutorEvent>,
     ) -> Self {
         let coordinator = CoordinatorService::new(store.clone());
         Self {

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use chronon_core::{ChrononError, Result};
 use chronon_executor::ScriptRegistry;
 use chronon_runtime::CoordinatorService;
 use serde_json::Value as JsonValue;
@@ -105,12 +106,13 @@ impl ChrononStateBuilder {
     ///
     /// # Errors
     ///
-    /// Returns an error when `require_admin_auth` is set and no verifier was installed.
-    pub fn build(self) -> Result<ChrononState, String> {
+    /// Returns [`ChrononError::Internal`] when `require_admin_auth` is set and no verifier
+    /// was installed.
+    pub fn build(self) -> Result<ChrononState> {
         if self.require_admin_auth && self.admin_auth.is_none() {
-            return Err(
+            return Err(ChrononError::Internal(
                 "CHRONON_REQUIRE_ADMIN_AUTH is set but no AdminAuth verifier was configured".into(),
-            );
+            ));
         }
         Ok(ChrononState {
             coordinator: self.coordinator,

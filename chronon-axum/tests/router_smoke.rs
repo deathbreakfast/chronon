@@ -671,7 +671,7 @@ async fn builder_requires_admin_auth_when_flagged() {
     let Err(err) = result else {
         panic!("must refuse without verifier");
     };
-    assert!(err.contains("AdminAuth"));
+    assert!(err.to_string().contains("AdminAuth"));
 }
 
 #[tokio::test]

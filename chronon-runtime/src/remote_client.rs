@@ -190,7 +190,7 @@ impl RemoteCoordinatorClient {
         let body: ApiResponse<T> = resp
             .json()
             .await
-            .map_err(|e| ChrononError::Internal(format!("remote decode: {e}")))?;
+            .map_err(|e| ChrononError::internal_source("remote decode", e))?;
         if !status.is_success() || !body.success {
             return Err(ChrononError::Internal(
                 body.error.unwrap_or_else(|| format!("HTTP {status}")),
@@ -222,7 +222,7 @@ impl RemoteCoordinatorClient {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+                .map_err(|e| ChrononError::internal_source("remote upsert_job", e))?,
         )
         .await?;
         Ok(())
@@ -235,7 +235,7 @@ impl RemoteCoordinatorClient {
                 .get(self.api_url("/jobs"))
                 .send()
                 .await
-                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+                .map_err(|e| ChrononError::internal_source("remote list_jobs", e))?,
         )
         .await
     }
@@ -252,7 +252,7 @@ impl RemoteCoordinatorClient {
                 .json(&req)
                 .send()
                 .await
-                .map_err(|e| ChrononError::Internal(e.to_string()))?,
+                .map_err(|e| ChrononError::internal_source("remote run_now", e))?,
         )
         .await?;
         Ok(resp)

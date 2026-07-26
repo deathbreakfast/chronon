@@ -1,23 +1,39 @@
 use super::TelemetrySink;
 
-/// Writes telemetry to stderr (development and bench).
+/// Writes telemetry via `tracing` (development and bench).
 ///
-/// When a `tracing` subscriber is installed, [`Self::log_event`] also emits a structured
-/// `tracing::info` event so host logs and stderr stay aligned.
+/// Prefer installing a `tracing` subscriber in the host. Events use target
+/// `chronon_telemetry` so they are filterable without raw stderr prints.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ConsoleSink;
 
 impl TelemetrySink for ConsoleSink {
     fn record_counter(&self, name: &str, labels: &[(&str, &str)], delta: u64) {
-        eprintln!("[chronon] counter {name} +{delta} {labels:?}");
+        tracing::info!(
+            target: "chronon_telemetry",
+            name,
+            delta,
+            ?labels,
+            "counter"
+        );
     }
 
     fn record_gauge(&self, name: &str, labels: &[(&str, &str)], value: f64) {
-        eprintln!("[chronon] gauge {name} = {value} {labels:?}");
+        tracing::info!(
+            target: "chronon_telemetry",
+            name,
+            value,
+            ?labels,
+            "gauge"
+        );
     }
 
     fn log_event(&self, schema: &str, fields: &[(&str, &str)]) {
-        eprintln!("[chronon] event {schema} {fields:?}");
-        tracing::info!(target: "chronon_telemetry", schema, ?fields, "telemetry event");
+        tracing::info!(
+            target: "chronon_telemetry",
+            schema,
+            ?fields,
+            "telemetry event"
+        );
     }
 }

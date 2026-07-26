@@ -62,8 +62,7 @@ async fn main() -> chronon::Result<()> {
     let chronon = ChrononState::builder(coordinator, registry)
         .admin_auth(Arc::new(StaticTokenAdminAuth::new(DEMO_TOKEN)))
         .require_admin_auth(true)
-        .build()
-        .map_err(chronon::ChrononError::Internal)?;
+        .build()?;
 
     let app = Router::new()
         .nest(API_PREFIX, chronon_router::<AppState>())

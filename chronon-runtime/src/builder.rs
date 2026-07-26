@@ -5,7 +5,9 @@ use std::sync::Arc;
 use chronon_core::context::{ContextFactory, NoOpContextFactory};
 use chronon_core::error::{ChrononError, Result};
 use chronon_core::store::SchedulerStore;
-use chronon_executor::{Executor, ScriptRegistry};
+use chronon_executor::{
+    event_channel_capacity_from_env, executor_concurrency_from_env, Executor, ScriptRegistry,
+};
 use chronon_scheduler::{Scheduler, SchedulerConfig};
 use chronon_telemetry::{NoOpSink, TelemetrySink};
 use tokio::sync::{mpsc, Notify};
@@ -228,12 +230,13 @@ impl ChrononBuilder {
             telemetry.clone(),
         ));
 
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = mpsc::channel(event_channel_capacity_from_env());
         let executor = Arc::new(Executor::new(
             registry,
             context_factory,
             telemetry,
             event_tx,
+            executor_concurrency_from_env(),
         ));
 
         Ok(super::Chronon::new(

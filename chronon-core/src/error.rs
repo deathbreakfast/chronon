@@ -65,6 +65,16 @@ pub enum ChrononError {
     /// Catch-all for invariant violations and bugs.
     #[error("internal error: {0}")]
     Internal(String),
+
+    /// Internal failure that preserves an underlying [`Error::source`] chain (e.g. transport).
+    #[error("internal error: {message}")]
+    InternalSource {
+        /// Human-readable summary.
+        message: String,
+        /// Underlying cause.
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
 }
 
 impl ChrononError {
@@ -84,6 +94,17 @@ impl ChrononError {
         Self::StorageError {
             message: message.into(),
             source: Some(Box::new(source)),
+        }
+    }
+
+    /// Internal failure wrapping an underlying error (preserves `Error::source`).
+    pub fn internal_source(
+        message: impl Into<String>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::InternalSource {
+            message: message.into(),
+            source: Box::new(source),
         }
     }
 }

@@ -10,6 +10,7 @@ use chronon_core::Result;
 use chronon_telemetry::TelemetrySink;
 use tokio::sync::Notify;
 use tokio::time::sleep;
+use tracing::warn;
 
 use crate::cron::CronExpr;
 use crate::env::env_flag;
@@ -56,7 +57,13 @@ async fn skip_due_job(
     now: DateTime<Utc>,
 ) -> Result<bool> {
     if job.schedule_kind == ScheduleKind::RunOnce {
-        let _ = store.mark_run_once_completed(job_id, now).await;
+        if let Err(e) = store.mark_run_once_completed(job_id, now).await {
+            warn!(
+                job_id = %job_id,
+                error = %e,
+                "failed to mark run-once completed during skip"
+            );
+        }
     }
     let next_run_at = if job.schedule_kind == ScheduleKind::Cron {
         cron_next_run_at(job, now)
@@ -69,7 +76,13 @@ async fn skip_due_job(
             &[("component", "tick_loop"), ("message", &e.to_string())],
         );
     }
-    let _ = store.release_job_tick_claim(job_id).await;
+    if let Err(e) = store.release_job_tick_claim(job_id).await {
+        warn!(
+            job_id = %job_id,
+            error = %e,
+            "failed to release job tick claim during skip"
+        );
+    }
     Ok(false)
 }
 
@@ -91,13 +104,25 @@ async fn enqueue_due_job(
     };
 
     let Some(job) = store.get_job(job_id).await? else {
-        let _ = store.release_job_tick_claim(job_id).await;
+        if let Err(e) = store.release_job_tick_claim(job_id).await {
+            warn!(
+                job_id = %job_id,
+                error = %e,
+                "failed to release job tick claim after missing job"
+            );
+        }
         return Ok(false);
     };
 
     let active_count = count_active_runs(store, job_id).await.unwrap_or(0);
     if active_count >= job.concurrency {
-        let _ = store.release_job_tick_claim(job_id).await;
+        if let Err(e) = store.release_job_tick_claim(job_id).await {
+            warn!(
+                job_id = %job_id,
+                error = %e,
+                "failed to release job tick claim at concurrency limit"
+            );
+        }
         return Ok(false);
     }
 
@@ -113,7 +138,13 @@ async fn enqueue_due_job(
         {
             Ok(true) => {}
             Ok(false) => {
-                let _ = store.release_job_tick_claim(job_id).await;
+                if let Err(e) = store.release_job_tick_claim(job_id).await {
+                    warn!(
+                        job_id = %job_id,
+                        error = %e,
+                        "failed to release job tick claim after run-once contention"
+                    );
+                }
                 return Ok(false);
             }
             Err(e) => {
@@ -121,7 +152,13 @@ async fn enqueue_due_job(
                     "chronon_scheduler_error",
                     &[("component", "tick_loop"), ("message", &e.to_string())],
                 );
-                let _ = store.release_job_tick_claim(job_id).await;
+                if let Err(release_err) = store.release_job_tick_claim(job_id).await {
+                    warn!(
+                        job_id = %job_id,
+                        error = %release_err,
+                        "failed to release job tick claim after run-once claim error"
+                    );
+                }
                 return Ok(false);
             }
         }
@@ -133,18 +170,43 @@ async fn enqueue_due_job(
     run.pool_id = Some(job_execution_pool_id(&job));
 
     let run_id = run.run_id.clone();
-    if store.create_run(&run).await.is_err() {
+    if let Err(e) = store.create_run(&run).await {
+        warn!(
+            job_id = %job_id,
+            run_id = %run_id,
+            error = %e,
+            "failed to create run during tick enqueue"
+        );
         if job.schedule_kind == ScheduleKind::RunOnce {
-            let _ = store
+            if let Err(release_err) = store
                 .release_run_once_claim(job_id, instance_id, Utc::now())
-                .await;
+                .await
+            {
+                warn!(
+                    job_id = %job_id,
+                    error = %release_err,
+                    "failed to release run-once claim after create_run failure"
+                );
+            }
         }
-        let _ = store.release_job_tick_claim(job_id).await;
+        if let Err(release_err) = store.release_job_tick_claim(job_id).await {
+            warn!(
+                job_id = %job_id,
+                error = %release_err,
+                "failed to release job tick claim after create_run failure"
+            );
+        }
         return Ok(false);
     }
 
     if job.schedule_kind == ScheduleKind::RunOnce {
-        let _ = store.mark_run_once_completed(job_id, Utc::now()).await;
+        if let Err(e) = store.mark_run_once_completed(job_id, Utc::now()).await {
+            warn!(
+                job_id = %job_id,
+                error = %e,
+                "failed to mark run-once completed after enqueue"
+            );
+        }
     }
 
     telemetry.log_event(

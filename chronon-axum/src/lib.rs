@@ -71,7 +71,7 @@
 //!     }
 //! }
 //!
-//! # fn mount() -> std::result::Result<Router<AppState>, String> {
+//! # fn mount() -> chronon_core::Result<Router<AppState>> {
 //! let store = Arc::new(InMemorySchedulerStore::new());
 //! let coordinator = Arc::new(CoordinatorService::new(store));
 //! let registry = Arc::new({
@@ -187,6 +187,6 @@ mod tests {
         let Err(err) = result else {
             panic!("must fail without AdminAuth");
         };
-        assert!(err.contains("AdminAuth"));
+        assert!(err.to_string().contains("AdminAuth"));
     }
 }

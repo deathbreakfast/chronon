@@ -7,7 +7,7 @@ use chronon_core::models::RunStatus;
 use chronon_core::store::SchedulerStore;
 use chronon_executor::ExecutorEvent;
 use chronon_telemetry::CapturedLogs;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::retry::finalize_failed_run;
 
@@ -29,7 +29,13 @@ pub async fn handle_executor_event(store: &Arc<dyn SchedulerStore>, event: Execu
                 }
                 run.started_at = Some(Utc::now());
                 run.status = RunStatus::Running;
-                let _ = store.update_run(&run).await;
+                if let Err(e) = store.update_run(&run).await {
+                    warn!(
+                        run_id = %run_id,
+                        error = %e,
+                        "failed to persist RunStarted status"
+                    );
+                }
             }
         }
         ExecutorEvent::RunCompleted {
@@ -49,7 +55,13 @@ pub async fn handle_executor_event(store: &Arc<dyn SchedulerStore>, event: Execu
                 run.complete();
                 run.duration_ms = Some(duration_ms);
                 apply_logs(&mut run, logs);
-                let _ = store.update_run(&run).await;
+                if let Err(e) = store.update_run(&run).await {
+                    warn!(
+                        run_id = %run_id,
+                        error = %e,
+                        "failed to persist RunCompleted status"
+                    );
+                }
             }
         }
         ExecutorEvent::RunFailed {
@@ -82,7 +94,13 @@ pub async fn handle_executor_event(store: &Arc<dyn SchedulerStore>, event: Execu
                     let mut captured = logs;
                     captured.ensure_stderr_message(&safe);
                     apply_logs(&mut run, captured);
-                    let _ = store.update_run(&run).await;
+                    if let Err(e) = store.update_run(&run).await {
+                        warn!(
+                            run_id = %run.run_id,
+                            error = %e,
+                            "failed to persist RunFailed status without job"
+                        );
+                    }
                 }
             }
         }
@@ -101,7 +119,7 @@ fn apply_logs(run: &mut chronon_core::models::Run, logs: CapturedLogs) {
 /// Background task: persist executor events until the channel closes.
 pub fn spawn_event_handler(
     store: Arc<dyn SchedulerStore>,
-    mut event_rx: tokio::sync::mpsc::UnboundedReceiver<ExecutorEvent>,
+    mut event_rx: tokio::sync::mpsc::Receiver<ExecutorEvent>,
 ) {
     tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {
