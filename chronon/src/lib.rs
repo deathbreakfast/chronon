@@ -23,7 +23,9 @@
 //!   (see [Choose a topology](#choose-a-topology)).
 //! - **Host identity** — [`ContextFactory`](chronon_core::ContextFactory) rebuilds run-time
 //!   context from the **run** `actor_json` snapshot.
-//! - **Optional HTTP API** — mount [`chronon_router`] (`axum` feature); hosts must wrap with auth.
+//! - **Optional HTTP API** — mount [`chronon_router`] (`axum` feature) with [`AdminAuth`] /
+//!   [`RequireAdmin`] and `CHRONON_REQUIRE_ADMIN_AUTH`; external upsert rejects System-shaped
+//!   `actor_json`.
 //!
 //! *Cron and run-once scheduling without locking you into one database or a full workflow engine.*
 //!
@@ -302,9 +304,12 @@
 //! | Concern | Where |
 //! |---------|--------|
 //! | Upsert-by-name | Axum upsert + `get_job_by_name` |
+//! | AdminAuth / require flag | `chronon-axum` `RequireAdmin` + `CHRONON_REQUIRE_ADMIN_AUTH` |
+//! | External System actor | `RejectExternalSystemActor` on HTTP upsert |
 //! | Actor snapshot at execute | Runtime worker / `Executor::spawn_run` use run `actor_json` |
 //! | List / policy bounds | `MAX_*` + `Job::clamp_security_bounds` / handler `.min(MAX_LIST_LIMIT)` |
 //! | Revision HTTP redaction | Axum revision handlers |
+//! | Error sanitize / URL redact | `sanitize_error_message` / `redact_endpoint` |
 //! | Postgres schema allowlist | `validate_postgres_schema_name` in sql-common |
 //!
 //! ```text
@@ -411,7 +416,11 @@ pub use chronon_runtime::{
 pub use chronon_scheduler::CronExpr;
 
 #[cfg(feature = "axum")]
-pub use chronon_axum::{chronon_router, ApiResponse, ChrononState, API_PREFIX};
+pub use chronon_axum::{
+    chronon_router, require_admin_auth_from_env, AdminAuth, AdminAuthError, AllowAllAdminAuth,
+    ApiResponse, ChrononState, ChrononStateBuilder, RequireAdmin, StaticTokenAdminAuth, API_PREFIX,
+    REQUIRE_ADMIN_AUTH_ENV,
+};
 
 #[cfg(feature = "mem")]
 pub use chronon_backend_mem::{install_default_mem_store, InMemorySchedulerStore};

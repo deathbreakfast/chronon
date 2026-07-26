@@ -80,7 +80,7 @@ Other examples: `script_macro`, `script_handle_job`, `run_now`, `embedded_tick`,
 
 ## Security hardening checks (axum / runtime / sql-common)
 
-After changes to HTTP upsert, actor snapshot, list bounds, revision redaction, or schema allowlisting:
+After changes to AdminAuth, actor policy, error sanitize/redact, HTTP upsert, actor snapshot, list bounds, revision redaction, or schema allowlisting:
 
 ```bash
 cargo test -p chronon-axum --test router_smoke -- --test-threads=1
@@ -92,6 +92,10 @@ cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum
 ```
 
 These are **correctness** gates (happy + sad paths). They are not BM-CH benchmark subjects; see [`chronon-bench/EXPERIMENTS.md`](../chronon-bench/EXPERIMENTS.md).
+
+**AWS e2e:** No new fleet topology. Waive new AWS scenarios — AdminAuth / actor policy / sanitize are covered by `chronon-axum` + unit tests on every PR; existing catalog (`actor_snapshot_toctou`) remains sufficient.
+
+**Bench:** Correctness-only waiver — no hot-path change requiring BM-CH re-measure.
 
 ## Baseline results (2026-07-08 quality pass)
 
@@ -136,25 +140,31 @@ Download `coverage-lcov` from the GitHub Actions run artifacts for the CI report
 
 ## Test Map (security hardening)
 
-| Behavior | Primary tests | Notes |
-|----------|---------------|-------|
-| Upsert-by-name | `router_smoke::upsert_job_preserves_job_id_by_name` | Happy preserve `job_id` + revision bump |
-| Upsert script mismatch / missing | `upsert_job_script_not_found` (+ `ApiResponse.error`) | Sad `400` with error body |
-| Policy clamps | `upsert_job_clamps_extreme_policy_knobs`, core `clamp_security_bounds` | Concurrent / timeout / retry caps |
-| List limit clamp | `handlers::tests::clamp_list_limit_*`, `list_runs_clamps_limit` | Cap = `MAX_LIST_LIMIT`; in-range limit unchanged |
-| Actor snapshot (TOCTOU) | executor `spawn_run_uses_run_actor_json_not_live_job`; catalog `actor_snapshot_toctou` | Run snapshot wins over live job |
-| Schema allowlist | `schema_name_accepts_*` / `schema_name_rejects_*` → `ParamError` | Isolated connect rejects bad names via same validator |
-| Revision redaction | `get_job_revisions_redacts_sensitive_fields` | HTTP nulls actor/params; **store** keeps full snapshot |
-| Revisions 404 | `get_job_revisions_not_found` | Missing job → `404` |
-| Event transitions | `chronon-runtime` `events::tests` (Claimed/Running/terminal/forged) | Illegal transitions ignored |
-| Host auth wrap | `auth_middleware_rejects_without_bearer` + `axum_auth_wrap` example | Happy `200` / sad `401` |
+| ID | Behavior | Primary tests | Notes |
+|----|----------|---------------|-------|
+| C-1 | Require flag without verifier | `router_smoke::builder_requires_admin_auth_when_flagged`, `chronon_axum::tests::builder_requires_auth_when_flagged` | Sad: `build()` Err |
+| C-1 | Token auth 401 / 200 | `admin_auth_missing_token_401`, `admin_auth_valid_token_200` | Header `x-chronon-admin-token` |
+| C-1 | Host middleware wrap | `auth_middleware_rejects_without_bearer` + `axum_auth_wrap` | Happy `200` / sad `401` |
+| C-2 | System actor rejected on HTTP | `upsert_rejects_system_shaped_actor_json`; core `actor_policy::tests::reject_external_system` | Sad `400`; internal OK |
+| C-3 | URL userinfo redaction | core `redact::tests::*`; sql-common `map_connect_err_redacts_userinfo` | Connect + text scan |
+| C-4 | Run error sanitize | core `sanitize::tests::*`; runtime `sanitize_strips_secret_prefixes_before_persist` | Persist + HTTP envelope |
+| — | Upsert-by-name | `upsert_job_preserves_job_id_by_name` | Happy preserve `job_id` + revision bump |
+| — | Upsert script mismatch / missing | `upsert_job_script_not_found` | Sad `400` with error body |
+| — | Policy clamps | `upsert_job_clamps_extreme_policy_knobs`, core `clamp_security_bounds` | Concurrent / timeout / retry caps |
+| — | List limit clamp | `handlers::tests::clamp_list_limit_*`, `list_runs_clamps_limit` | Cap = `MAX_LIST_LIMIT` |
+| — | Actor snapshot (TOCTOU) | executor `spawn_run_uses_run_actor_json_not_live_job`; catalog `actor_snapshot_toctou` | Run snapshot wins |
+| — | Schema allowlist | `schema_name_accepts_*` / `schema_name_rejects_*` | Isolated connect → `ParamError` |
+| — | Revision redaction | `get_job_revisions_redacts_sensitive_fields` | HTTP nulls; store keeps full |
+| — | Event transitions | `chronon-runtime` `events::tests` | Illegal transitions ignored |
 
 ## Documentation Map (hardening surface)
 
 | Topic | Landing | Mid | Deep |
 |-------|---------|-----|------|
+| AdminAuth / RequireAdmin | `uf-chronon` Features + `chronon-axum` crate root | `SECURITY.md` operator table | `axum_auth_wrap` example |
+| External actor policy | `SECURITY.md` HTTP `actor_json` | `RejectExternalSystemActor` | upsert handler |
 | Upsert-by-name / bounds / redaction / schema | `uf-chronon` Features + Architecture | `chronon-axum` handlers / `SECURITY.md` | sql-common `validate_postgres_schema_name` |
 | Actor snapshot at execute | `uf-chronon` Host identity Feature | `ContextFactory` / executor `spawn_run` | catalog `actor_snapshot_toctou` |
-| Auth residual | `chronon_router` docs + `SECURITY.md` | `axum_auth_wrap` example | host middleware integration test |
-| Body size residual | `SECURITY.md` (`DefaultBodyLimit`) | — | host Axum config |
+| Error sanitize / URL redact | `SECURITY.md` Errors | `sanitize_error_message` / `redact_endpoint` | connect `map_connect_err` |
+| Body size | `SECURITY.md` (`DefaultBodyLimit`) | — | host Axum config |
 | Verification gates | this file + `CONTRIBUTING.md` | rustdoc + cargo checklist | e2e / AWS scripts |

@@ -74,10 +74,13 @@ pub async fn handle_executor_event(store: &Arc<dyn SchedulerStore>, event: Execu
                     finalize_failed_run(store, run, &job, RunStatus::Failed, error, Some(logs))
                         .await;
                 } else {
+                    let safe = chronon_core::sanitize_error_message(
+                        &chronon_core::redact_credentials_in_text(&error),
+                    );
                     let mut run = run;
-                    run.fail(error.clone());
+                    run.fail(safe.clone());
                     let mut captured = logs;
-                    captured.ensure_stderr_message(&error);
+                    captured.ensure_stderr_message(&safe);
                     apply_logs(&mut run, captured);
                     let _ = store.update_run(&run).await;
                 }

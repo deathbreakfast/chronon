@@ -15,7 +15,7 @@ use tracing_subscriber::registry::LookupSpan;
 /// Default capture budget (1 MiB) matching Chronon DESIGN §12.
 pub const DEFAULT_MAX_CAPTURE_BYTES: usize = 1_000_000;
 
-/// Captured stdout/stderr text ready to persist on a [`chronon_core::models::Run`].
+/// Captured stdout/stderr text ready to persist on a Chronon run row.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CapturedLogs {
     /// Info/debug-level lines (and unclassified events).

@@ -31,6 +31,7 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use chronon_core::models::{Job, Run, RunStatus};
 use chronon_core::store::SchedulerStore;
+use chronon_core::{redact_credentials_in_text, sanitize_error_message};
 use chronon_telemetry::CapturedLogs;
 use tracing::{info, warn};
 
@@ -47,7 +48,7 @@ pub async fn finalize_failed_run(
     error: impl Into<String>,
     logs: Option<CapturedLogs>,
 ) {
-    let message = error.into();
+    let message = sanitize_error_message(&redact_credentials_in_text(&error.into()));
     match status {
         RunStatus::Timeout => run.timeout(message.clone()),
         _ => run.fail(message.clone()),
@@ -209,6 +210,30 @@ mod tests {
         let runs = store.list_runs_for_job(&job.job_id, 10).await.unwrap();
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].status, RunStatus::Failed);
+    }
+
+    #[tokio::test]
+    async fn sanitize_strips_secret_prefixes_before_persist() {
+        let store: Arc<dyn SchedulerStore> = Arc::new(InMemorySchedulerStore::new());
+        let job = Job::new("sanitize-job", "script");
+        store.upsert_job(&job).await.unwrap();
+        let run = Run::for_job(&job.job_id, "script", Utc::now());
+        store.create_run(&run).await.unwrap();
+
+        finalize_failed_run(
+            &store,
+            run.clone(),
+            &job,
+            RunStatus::Failed,
+            "handler failed password=hunter2 leftover",
+            None,
+        )
+        .await;
+
+        let failed = store.get_run(&run.run_id).await.unwrap().unwrap();
+        let stderr = failed.stderr_text.as_deref().unwrap_or("");
+        assert!(stderr.contains("[redacted]"));
+        assert!(!stderr.contains("hunter2"));
     }
 
     #[tokio::test]

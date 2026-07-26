@@ -29,7 +29,7 @@ Matrix-driven **correctness** integration tests for Chronon scheduler runtime fe
 | All catalog scenarios × coordinator-worker (14) | ✓ | ✓ | ✓ (ignored) | ✓ (ignored) |
 | Distributed smokes (multi-worker) | — | — | — | ✓ (AWS only) |
 
-**Axum HTTP hardening** ([`chronon-axum/tests/router_smoke.rs`](../chronon-axum/tests/router_smoke.rs)): upsert-by-name, policy clamps, list limit clamp, revision redaction (+ store retention), host auth middleware — run on every PR with `cargo test -p chronon-axum`. Catalog includes `actor_snapshot_toctou`. AWS e2e scripts (`run-remote-ci.sh` / `run-e2e-aws.sh`) pick up the catalog via the existing matrix macros; no new fleet topology.
+**Axum HTTP hardening** ([`chronon-axum/tests/router_smoke.rs`](../chronon-axum/tests/router_smoke.rs)): AdminAuth require/token, System actor reject, upsert-by-name, policy clamps, list limit clamp, revision redaction (+ store retention), host auth middleware — run on every PR with `cargo test -p chronon-axum`. Catalog includes `actor_snapshot_toctou`. AWS e2e: no new scenarios (unit/integration cover C-1..C-4); existing scripts pick up the catalog via matrix macros.
 
 **Store contract** ([`run_store_contract`](../chronon-testkit/src/store_contract.rs)): mem, sqlite, postgres, redis composite, concurrent claim exclusivity.
 

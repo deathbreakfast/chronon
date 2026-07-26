@@ -8,6 +8,7 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use chronon_axum::{
     chronon_router, ApiResponse, ChrononState, JobResponse, RunResponse, ScriptResponse,
+    StaticTokenAdminAuth,
 };
 use chronon_backend_mem::InMemorySchedulerStore;
 use chronon_core::models::{Job, Run, RunStatus, ScheduleKind};
@@ -653,6 +654,108 @@ async fn list_runs_filtered_by_status() {
     assert_eq!(resp.status(), StatusCode::OK);
     let parsed: ApiResponse<Vec<RunResponse>> = json_body(resp).await;
     assert_eq!(parsed.data.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn builder_requires_admin_auth_when_flagged() {
+    let store = Arc::new(InMemorySchedulerStore::new());
+    let coordinator = Arc::new(CoordinatorService::new(store));
+    let registry = Arc::new({
+        let mut r = ScriptRegistry::new();
+        r.register(&ScriptDescriptor::new("test_script", noop_invoke));
+        r
+    });
+    let result = ChrononState::builder(coordinator, registry)
+        .require_admin_auth(true)
+        .build();
+    let Err(err) = result else {
+        panic!("must refuse without verifier");
+    };
+    assert!(err.contains("AdminAuth"));
+}
+
+#[tokio::test]
+async fn admin_auth_missing_token_401() {
+    let store = Arc::new(InMemorySchedulerStore::new());
+    let coordinator = Arc::new(CoordinatorService::new(store));
+    let registry = Arc::new({
+        let mut r = ScriptRegistry::new();
+        r.register(&ScriptDescriptor::new("test_script", noop_invoke));
+        r
+    });
+    let chronon = ChrononState::builder(coordinator, registry)
+        .admin_auth(Arc::new(StaticTokenAdminAuth::new("secret")))
+        .require_admin_auth(true)
+        .build()
+        .unwrap();
+    let app = test_app(AppState { chronon });
+    let denied = app
+        .oneshot(
+            Request::builder()
+                .uri("/scripts")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn admin_auth_valid_token_200() {
+    let store = Arc::new(InMemorySchedulerStore::new());
+    let coordinator = Arc::new(CoordinatorService::new(store));
+    let registry = Arc::new({
+        let mut r = ScriptRegistry::new();
+        r.register(&ScriptDescriptor::new("test_script", noop_invoke));
+        r
+    });
+    let chronon = ChrononState::builder(coordinator, registry)
+        .admin_auth(Arc::new(StaticTokenAdminAuth::new("secret")))
+        .require_admin_auth(true)
+        .build()
+        .unwrap();
+    let app = test_app(AppState { chronon });
+    let allowed = app
+        .oneshot(
+            Request::builder()
+                .uri("/scripts")
+                .header("x-chronon-admin-token", "secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed.status(), StatusCode::OK);
+    let parsed: ApiResponse<Vec<ScriptResponse>> = json_body(allowed).await;
+    assert!(parsed.success);
+    assert_eq!(parsed.data.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn upsert_rejects_system_shaped_actor_json() {
+    let app = test_app(test_state());
+    let body = serde_json::json!({
+        "job_name": "elevated",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+        "actor_json": { "System": { "operation": "mint" } },
+    });
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let parsed: ApiResponse<JobResponse> = json_body(resp).await;
+    assert!(!parsed.success);
+    assert!(parsed.error.as_deref().unwrap_or("").contains("System"));
 }
 
 #[tokio::test]

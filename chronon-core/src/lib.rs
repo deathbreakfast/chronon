@@ -29,16 +29,23 @@
 //!
 //! See also: [`DEFAULT_STORE_NAME`], [`ScriptHandle`].
 
+pub mod actor_policy;
 pub mod context;
 pub mod error;
 pub mod handle;
 pub mod models;
+pub mod redact;
 pub mod router;
+pub mod sanitize;
 pub mod store;
 
 #[cfg(test)]
 mod unit_tests;
 
+pub use actor_policy::{
+    default_http_enqueue_actor, is_system_shaped_actor, ActorJsonPolicy, EnqueueTrust,
+    RejectExternalSystemActor,
+};
 pub use context::{
     ContextFactory, IdentityError, JsonScriptContextFactory, NoOpContextFactory, NoOpScriptContext,
     ScriptContext,
@@ -50,5 +57,7 @@ pub use models::{
     ScheduleKind, SchedulerLeader, Script, Worker, WorkerStatus, MAX_JOB_CONCURRENCY,
     MAX_LIST_LIMIT, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS, MAX_TIMEOUT_MS,
 };
+pub use redact::{redact_credentials_in_text, redact_endpoint};
 pub use router::{default_store_from_global, StoreRouter, DEFAULT_STORE_NAME};
+pub use sanitize::{sanitize_error_message, MAX_ERROR_MESSAGE_CHARS};
 pub use store::SchedulerStore;

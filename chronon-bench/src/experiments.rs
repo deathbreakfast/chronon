@@ -64,7 +64,7 @@ pub fn resolve_experiment(
             default_ops: ops.unwrap_or(10_000),
             default_jobs: None,
         },
-        "bm-ch3" => ExperimentPlan {
+        "bm-ch3" | "bm-ch-retry" => ExperimentPlan {
             id: id.into(),
             default_ops: ops.unwrap_or(200),
             default_jobs: None,
@@ -93,11 +93,6 @@ pub fn resolve_experiment(
             id: id.into(),
             default_ops: ops.unwrap_or(32),
             default_jobs: Some(jobs.unwrap_or(100_000)),
-        },
-        "bm-ch-retry" => ExperimentPlan {
-            id: id.into(),
-            default_ops: ops.unwrap_or(200),
-            default_jobs: None,
         },
         "bm-chl0" => ExperimentPlan {
             id: id.into(),

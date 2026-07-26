@@ -1,7 +1,7 @@
 //! JSON envelope shared by all Chronon API responses.
 
 use axum::{http::StatusCode, Json};
-use chronon_core::ChrononError;
+use chronon_core::{redact_credentials_in_text, sanitize_error_message, ChrononError};
 use serde::{Deserialize, Serialize};
 
 /// Standard API wrapper: `success`, optional `data`, optional `error`.
@@ -32,7 +32,9 @@ impl<T> ApiResponse<T> {
         Self {
             success: false,
             data: None,
-            error: Some(error.into()),
+            error: Some(sanitize_error_message(&redact_credentials_in_text(
+                &error.into(),
+            ))),
         }
     }
 }

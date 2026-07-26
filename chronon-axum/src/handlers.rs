@@ -1,4 +1,8 @@
 //! Axum route handlers for `/api/chronon/*`.
+//!
+//! All routes extract [`RequireAdmin`]. HTTP upsert rejects System-shaped `actor_json`
+//! via [`RejectExternalSystemActor`] (`EnqueueTrust::External`). In-process
+//! [`CoordinatorService`](chronon_runtime::CoordinatorService) upsert may still set System.
 
 use axum::{
     extract::{Path, Query, State},
@@ -6,8 +10,12 @@ use axum::{
     Json,
 };
 
-use chronon_core::{ChrononError, Job, ScheduleKind, MAX_LIST_LIMIT};
+use chronon_core::{
+    ActorJsonPolicy, ChrononError, EnqueueTrust, Job, RejectExternalSystemActor, ScheduleKind,
+    MAX_LIST_LIMIT,
+};
 
+use crate::auth::RequireAdmin;
 use crate::dto::{
     JobActionRequest, JobResponse, ListJobsQuery, ListRunsQuery, RunResponse, UpsertJobRequest,
 };
@@ -26,8 +34,9 @@ pub(crate) fn clamp_list_limit(limit: Option<usize>) -> usize {
 /// When a job with the same `job_name` already exists, its `job_id` and `created_at` are preserved and
 /// `current_revision` is bumped. Concurrency, timeout, and retry policy values are clamped to
 /// [`chronon_core::MAX_JOB_CONCURRENCY`] / [`chronon_core::MAX_TIMEOUT_MS`] / retry ceilings.
-#[tracing::instrument(skip(state, req), fields(job_name = %req.job_name, script_name = %req.script_name))]
+#[tracing::instrument(skip(_admin, state, req), fields(job_name = %req.job_name, script_name = %req.script_name))]
 pub async fn upsert_job(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Json(req): Json<UpsertJobRequest>,
 ) -> (StatusCode, Json<ApiResponse<JobResponse>>) {
@@ -59,6 +68,9 @@ pub async fn upsert_job(
     job.timeout_ms = req.timeout_ms;
     if let Some(ref actor) = req.actor_json {
         if !actor.is_null() {
+            if let Err(e) = RejectExternalSystemActor.validate(EnqueueTrust::External, actor) {
+                return chronon_err(&e);
+            }
             job.actor_json = actor.clone();
         }
     }
@@ -96,6 +108,7 @@ pub async fn upsert_job(
 
 /// `GET /jobs` — list jobs with optional filters and pagination.
 pub async fn list_jobs(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Query(query): Query<ListJobsQuery>,
 ) -> (StatusCode, Json<ApiResponse<Vec<JobResponse>>>) {
@@ -151,6 +164,7 @@ pub async fn list_jobs(
 
 /// `GET /jobs/{id}` — fetch one job by id; 404 when missing.
 pub async fn get_job(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Path(job_id): Path<String>,
 ) -> (StatusCode, Json<ApiResponse<JobResponse>>) {
@@ -162,6 +176,7 @@ pub async fn get_job(
 
 /// `POST /jobs/pause` — disable scheduling for a job.
 pub async fn pause_job(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Json(req): Json<JobActionRequest>,
 ) -> (StatusCode, Json<ApiResponse<()>>) {
@@ -173,6 +188,7 @@ pub async fn pause_job(
 
 /// `POST /jobs/resume` — re-enable scheduling for a job.
 pub async fn resume_job(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Json(req): Json<JobActionRequest>,
 ) -> (StatusCode, Json<ApiResponse<()>>) {
@@ -183,8 +199,12 @@ pub async fn resume_job(
 }
 
 /// `POST /jobs/run_now` — enqueue an immediate run; returns new `run_id` in `data`.
-#[tracing::instrument(skip(state, req), fields(job_id = %req.job_id))]
+///
+/// Actor identity comes from the job row (snapshotted onto the run). Clients cannot supply
+/// `actor_json` on this route; set identity via upsert (external rejects System) or in-process.
+#[tracing::instrument(skip(_admin, state, req), fields(job_id = %req.job_id))]
 pub async fn run_now(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Json(req): Json<JobActionRequest>,
 ) -> (StatusCode, Json<ApiResponse<String>>) {
@@ -204,6 +224,7 @@ pub async fn run_now(
 /// `snapshot_json`) are redacted in the HTTP response. Full snapshots remain in the store for
 /// host admin tooling.
 pub async fn get_job_revisions(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Path(job_id): Path<String>,
 ) -> (StatusCode, Json<ApiResponse<Vec<serde_json::Value>>>) {
@@ -240,6 +261,7 @@ fn redact_revision_snapshot(mut snapshot: serde_json::Value) -> serde_json::Valu
 
 /// `GET /runs` — paginated run list with optional filters.
 pub async fn list_runs(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Query(query): Query<ListRunsQuery>,
 ) -> (StatusCode, Json<ApiResponse<Vec<RunResponse>>>) {
@@ -265,6 +287,7 @@ pub async fn list_runs(
 
 /// `GET /runs/{id}` — fetch one run; 404 when missing.
 pub async fn get_run(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
     Path(run_id): Path<String>,
 ) -> (StatusCode, Json<ApiResponse<RunResponse>>) {
@@ -277,6 +300,7 @@ pub async fn get_run(
 
 /// `GET /scripts` — list registered scripts from the host registry.
 pub async fn list_scripts(
+    _admin: RequireAdmin,
     State(state): State<ChrononState>,
 ) -> Json<ApiResponse<Vec<crate::dto::ScriptResponse>>> {
     let scripts: Vec<crate::dto::ScriptResponse> = state

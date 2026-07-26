@@ -64,6 +64,7 @@ impl RedisQueueLayer {
         let prefix = key_prefix.unwrap_or("chronon").to_string();
 
         if let Ok(urls) = std::env::var("CHRONON_REDIS_CLUSTER_URLS") {
+            let label = chronon_core::redact_endpoint(&urls);
             let nodes: Vec<String> = urls
                 .split(',')
                 .map(str::trim)
@@ -71,8 +72,12 @@ impl RedisQueueLayer {
                 .map(String::from)
                 .collect();
             if !nodes.is_empty() {
-                let client = redis::cluster::ClusterClient::new(nodes).map_err(map_err)?;
-                let conn = client.get_async_connection().await.map_err(map_err)?;
+                let client = redis::cluster::ClusterClient::new(nodes)
+                    .map_err(|e| map_connect_err(&label, e))?;
+                let conn = client
+                    .get_async_connection()
+                    .await
+                    .map_err(|e| map_connect_err(&label, e))?;
                 return Ok(Self {
                     single: None,
                     cluster: Some(Arc::new(Mutex::new(conn))),
@@ -82,8 +87,10 @@ impl RedisQueueLayer {
             }
         }
 
-        let client = redis::Client::open(url).map_err(map_err)?;
-        let conn = ConnectionManager::new(client).await.map_err(map_err)?;
+        let client = redis::Client::open(url).map_err(|e| map_connect_err(url, e))?;
+        let conn = ConnectionManager::new(client)
+            .await
+            .map_err(|e| map_connect_err(url, e))?;
         Ok(Self {
             single: Some(conn),
             cluster: None,
@@ -254,8 +261,19 @@ fn format_ready_key(prefix: &str, pool_id: &str, hash_tags: bool) -> String {
 }
 
 fn map_err(e: impl std::error::Error + Send + Sync + 'static) -> ChrononError {
-    let message = e.to_string();
+    let message = chronon_core::redact_credentials_in_text(&e.to_string());
     ChrononError::storage_source(message, e)
+}
+
+fn map_connect_err(url: &str, e: impl std::error::Error + Send + Sync + 'static) -> ChrononError {
+    let detail = chronon_core::redact_credentials_in_text(&e.to_string());
+    ChrononError::storage_source(
+        format!(
+            "redis connect {}: {detail}",
+            chronon_core::redact_endpoint(url)
+        ),
+        e,
+    )
 }
 
 #[cfg(test)]

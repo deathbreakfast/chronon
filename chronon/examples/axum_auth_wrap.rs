@@ -1,7 +1,7 @@
-//! Demonstrate wrapping [`chronon_router`] with host authentication middleware.
+//! Demonstrate [`RequireAdmin`] + [`StaticTokenAdminAuth`] on the Chronon HTTP API.
 //!
-//! Chronon does not ship identity. Hosts (for example Higgs) must authenticate before
-//! exposing `/api/chronon/*`. This example uses a demo Bearer token as a Tower layer pattern.
+//! Install a host [`AdminAuth`] verifier, set require-admin-auth, and nest under
+//! [`API_PREFIX`] before public bind. Higgs (or equivalent) owns production identity.
 //!
 //! ```bash
 //! cargo run -p uf-chronon --example axum_auth_wrap --features mem,axum
@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::FromRef;
-use axum::http::{header, Request, StatusCode};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
+use axum::http::{Request, StatusCode};
 use axum::Router;
 use chronon::prelude::*;
-use chronon_axum::{chronon_router, ApiResponse, ChrononState, ScriptResponse, API_PREFIX};
+use chronon_axum::{
+    chronon_router, ApiResponse, ChrononState, ScriptResponse, StaticTokenAdminAuth, API_PREFIX,
+};
 use chronon_backend_mem::InMemorySchedulerStore;
 use chronon_executor::{ScriptDescriptor, ScriptRegistry};
 use http_body_util::BodyExt;
@@ -42,19 +42,6 @@ impl FromRef<AppState> for ChrononState {
     }
 }
 
-async fn require_bearer(req: Request<Body>, next: Next) -> Response {
-    let authorized = req
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v == format!("Bearer {DEMO_TOKEN}"));
-    if authorized {
-        next.run(req).await
-    } else {
-        StatusCode::UNAUTHORIZED.into_response()
-    }
-}
-
 #[tokio::main]
 async fn main() -> chronon::Result<()> {
     let _ = tracing_subscriber::fmt()
@@ -72,13 +59,15 @@ async fn main() -> chronon::Result<()> {
         r
     });
 
-    let chronon_routes = chronon_router::<AppState>();
+    let chronon = ChrononState::builder(coordinator, registry)
+        .admin_auth(Arc::new(StaticTokenAdminAuth::new(DEMO_TOKEN)))
+        .require_admin_auth(true)
+        .build()
+        .map_err(chronon::ChrononError::Internal)?;
+
     let app = Router::new()
-        .nest(API_PREFIX, chronon_routes)
-        .layer(middleware::from_fn(require_bearer))
-        .with_state(AppState {
-            chronon: ChrononState::new(coordinator, registry),
-        });
+        .nest(API_PREFIX, chronon_router::<AppState>())
+        .with_state(AppState { chronon });
 
     let denied = app
         .clone()
@@ -96,7 +85,7 @@ async fn main() -> chronon::Result<()> {
         .oneshot(
             Request::builder()
                 .uri(format!("{API_PREFIX}/scripts"))
-                .header(header::AUTHORIZATION, format!("Bearer {DEMO_TOKEN}"))
+                .header("x-chronon-admin-token", DEMO_TOKEN)
                 .body(Body::empty())
                 .map_err(|e| chronon::ChrononError::Internal(e.to_string()))?,
         )
@@ -115,7 +104,7 @@ async fn main() -> chronon::Result<()> {
     assert_eq!(parsed.data.as_ref().map(std::vec::Vec::len), Some(1));
 
     eprintln!(
-        "Chronon API at {API_PREFIX} — unauthenticated → 401, Bearer demo token → listed 1 script"
+        "Chronon API at {API_PREFIX} — missing token → 401, x-chronon-admin-token → listed 1 script"
     );
     Ok(())
 }
