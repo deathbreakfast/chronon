@@ -124,12 +124,39 @@ cargo run -p uf-chronon --example remote_http_client --features mem,axum
 
 **Production:** Chronon does not authenticate `/api/chronon/*`. Wrap with host auth — see `axum_auth_wrap` and repository [`SECURITY.md`](../SECURITY.md).
 
+### 4. Combined production shape — `authenticated_remote_postgres_redis` (standalone)
+
+Postgres + Redis storage, [`StaticTokenAdminAuth`](https://docs.rs/chronon-axum) gating every
+route, and `RemoteCoordinatorClient` against the mounted API — the three earlier pieces
+composed into one auth-gated remote coordinator. Requires PostgreSQL and Redis:
+
+```bash
+docker run -d --name chronon-pg -e POSTGRES_USER=chronon -e POSTGRES_PASSWORD=chronon \
+  -e POSTGRES_DB=chronon -p 5432:5432 postgres:16
+docker run -d --name chronon-redis -p 6379:6379 redis:7
+
+export CHRONON_POSTGRES_URL=postgres://chronon:chronon@localhost:5432/chronon
+cargo run -p uf-chronon --example authenticated_remote_postgres_redis --features postgres,redis,axum
+```
+
+Success: `missing token denied, x-chronon-admin-token allowed`. `RemoteCoordinatorClient` has no
+header hook today, so the deny path uses the client as-is and the allow path attaches
+`x-chronon-admin-token` directly (`reqwest` in the example, `curl` for manual checks):
+
+```bash
+curl -i http://127.0.0.1:PORT/api/chronon/jobs                                        # 401
+curl -i http://127.0.0.1:PORT/api/chronon/jobs -H 'x-chronon-admin-token: <token>'     # 200
+```
+
 ### Other examples
 
 | Example | Topology | Features | Notes |
 |---------|----------|----------|-------|
 | `script_macro`, `script_handle_job`, `run_now`, `embedded_tick` | Embedded | `mem` | API / scheduling demos |
 | `store_router_boot` | Embedded | `mem` | Global store router |
+| `telemetry_console` | Embedded | `mem,telemetry-console` | `ConsoleSink` telemetry via `tracing` |
+| `domain_context_factory` | Embedded | `mem` | Custom `ContextFactory`; fail-closed identity |
+| `custom_store_stub` | Embedded | `mem` | Decorator `SchedulerStore` sketch |
 | `postgres_boot`, `postgres_redis_boot` | Embedded | `postgres` / `postgres,redis` | Store wiring |
 | `axum_host`, `axum_auth_wrap` | Embedded + HTTP | `mem,axum` | Router / Bearer demo |
 | `postgres_coordinator_daemon`, `postgres_worker_daemon` | Coordinator–worker | `postgres` | Postgres-only split |

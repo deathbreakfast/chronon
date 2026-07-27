@@ -58,7 +58,10 @@ chrono = { workspace = true }
 http-body-util = "0.1"
 tower = { workspace = true }
 axum = { workspace = true }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
 
 [[example]]
 name = "script_macro"
@@ -78,6 +81,18 @@ required-features = ["mem"]
 
 [[example]]
 name = "store_router_boot"
+required-features = ["mem"]
+
+[[example]]
+name = "telemetry_console"
+required-features = ["mem", "telemetry-console"]
+
+[[example]]
+name = "domain_context_factory"
+required-features = ["mem"]
+
+[[example]]
+name = "custom_store_stub"
 required-features = ["mem"]
 
 [[example]]
@@ -127,3 +142,7 @@ required-features = ["postgres", "redis"]
 [[example]]
 name = "worker_daemon"
 required-features = ["postgres", "redis"]
+
+[[example]]
+name = "authenticated_remote_postgres_redis"
+required-features = ["postgres", "redis", "axum"]
