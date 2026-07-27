@@ -1,13 +1,6 @@
 # chronon-telemetry
 
-`TelemetrySink` trait and console/no-op adapters.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Integrators** | Installing `NoOpSink` or `ConsoleSink` on `ChrononBuilder` |
-| **Adapter authors** | Implementing custom metrics/event sinks |
+`TelemetrySink` trait and console/no-op adapters — install `NoOpSink` or `ConsoleSink` on `ChrononBuilder`, or implement custom metrics/event sinks.
 
 ## Shipped adapters
 

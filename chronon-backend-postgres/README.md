@@ -1,10 +1,6 @@
 # chronon-backend-postgres
 
-PostgreSQL [`SchedulerStore`](https://docs.rs/chronon-core/latest/chronon_core/trait.SchedulerStore.html) adapter for Chronon.
-
-## Audience
-
-**Backend engineers** deploying shared durable storage for production coordinator–worker clusters.
+Shared durable PostgreSQL [`SchedulerStore`](https://docs.rs/chronon-core/latest/chronon_core/trait.SchedulerStore.html) for production coordinator–worker clusters.
 
 ## Compose with Chronon
 

@@ -1,14 +1,6 @@
 # chronon-core
 
-Portable DTOs, `SchedulerStore` port, `StoreRouter`, errors, and identity ports.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Integrators** | `SchedulerStore`, `StoreRouter`, `ChrononError` |
-| **Adapter authors** | Implementing persistence against portable DTOs |
-| **Script authors** | `ScriptContext` trait surface (macro details in `chronon-macros`) |
+Portable DTOs, `SchedulerStore` port, `StoreRouter`, errors, and identity ports — wire hosts via `StoreRouter`/`ChrononError`, implement persistence against portable DTOs, and expose the `ScriptContext` trait surface (macro details in `chronon-macros`).
 
 ## Role
 

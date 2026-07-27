@@ -1,10 +1,6 @@
 # chronon-backend-mem
 
-In-memory `SchedulerStore` adapter (tests, CI, testkit default).
-
-## Audience
-
-**Integrators** wiring local evaluation and **bench/e2e** drivers.
+In-memory `SchedulerStore` adapter for local evaluation, bench/e2e drivers, tests, and CI (testkit default).
 
 ## Compose
 

@@ -1,12 +1,6 @@
 # chronon-backend-sqlite
 
-SQLite [`SchedulerStore`](https://docs.rs/chronon-core/latest/chronon_core/trait.SchedulerStore.html) adapter for Chronon.
-
-## Audience
-
-**Backend engineers** and **test authors** needing embedded, file-backed persistence.
-
-**Single-writer limitation:** SQLite serializes writes. One Chronon scheduler + worker pool on a single host is fine; for concurrent claim-heavy workloads prefer PostgreSQL or the Postgres + Redis composite backend.
+Embedded, file-backed SQLite [`SchedulerStore`](https://docs.rs/chronon-core/latest/chronon_core/trait.SchedulerStore.html) adapter for Chronon. SQLite serializes writes — one Chronon scheduler + worker pool on a single host is fine; for concurrent claim-heavy workloads prefer PostgreSQL or the Postgres + Redis composite backend.
 
 ## Compose with Chronon
 

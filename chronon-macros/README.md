@@ -1,10 +1,6 @@
 # chronon-macros
 
-Proc macros for Chronon scheduled scripts.
-
-Provides `#[chronon::script]` for defining scripts with typed parameter structs and Quark inventory registration.
-
-**Audience:** Application developers authoring scheduled script handlers.
+Proc macros for Chronon scheduled scripts — define scheduled script handlers with `#[chronon::script]`, typed parameter structs, and Quark inventory registration.
 
 ## Quick start
 

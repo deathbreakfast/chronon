@@ -1,10 +1,6 @@
 # chronon-backend-redis
 
-Postgres + Redis composite: SQL durability with a Redis sorted-set claim queue.
-
-## Audience
-
-**Backend engineers** deploying high worker claim throughput — SQL holds admin/history; Redis orders `claim_next_queued`.
+Postgres + Redis composite for high worker claim throughput — SQL holds admin/history; Redis orders `claim_next_queued` via a sorted-set claim queue.
 
 ## Components
 

@@ -1,8 +1,6 @@
 # chronon-bench
 
-Performance CLI and experiment registry for BM-CH* (scheduler layer) and BM-CH7-D hyperscale campaigns.
-
-**Audience:** Operators and upstream maintainers running benchmark campaigns.
+Performance CLI and experiment registry for BM-CH* (scheduler layer) and BM-CH7-D hyperscale campaigns — run benchmark sweeps, matrix slices, scaling curves, and fleet aggregation.
 
 **Docs:** [`EXPERIMENTS.md`](EXPERIMENTS.md) · [`PERFORMANCE_STUDY.md`](PERFORMANCE_STUDY.md)
 

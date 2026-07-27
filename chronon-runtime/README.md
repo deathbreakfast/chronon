@@ -1,13 +1,6 @@
 # chronon-runtime
 
-`Chronon`, `ChrononBuilder`, `CoordinatorService`, and runtime loop assembly.
-
-## Audience
-
-| Reader | Use this crate for |
-|--------|-------------------|
-| **Integrators** | `.embedded()`, `.coordinator_only()`, `.worker()`, `.remote_coordinator()` |
-| **Maintainers** | Scheduler + executor wiring, event persistence |
+`Chronon`, `ChrononBuilder`, `CoordinatorService`, and runtime loop assembly — choose deployment shape via `.embedded()`, `.coordinator_only()`, `.worker()`, or `.remote_coordinator()`; scheduler + executor wiring and event persistence live here.
 
 ## Deployment shapes (not enums)
 
