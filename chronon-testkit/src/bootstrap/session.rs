@@ -37,7 +37,7 @@ impl BootstrapSession {
             }
             StorageAdapter::Postgres => {
                 let url = chronon_backend_postgres::postgres_test_url();
-                let schema = format!("chronon_test_{}", uuid::Uuid::new_v4());
+                let schema = format!("chronon_test_{}", uuid::Uuid::new_v4().simple());
                 let backend =
                     Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?);
                 self.postgres_schema = Some(schema);
@@ -45,7 +45,7 @@ impl BootstrapSession {
             }
             StorageAdapter::PostgresRedis => {
                 let url = chronon_backend_postgres::postgres_test_url();
-                let schema = format!("chronon_test_{}", uuid::Uuid::new_v4());
+                let schema = format!("chronon_test_{}", uuid::Uuid::new_v4().simple());
                 let sql = Arc::new(PostgresSchedulerStore::connect_isolated(&url, &schema).await?);
                 let redis_url = std::env::var("CHRONON_REDIS_URL")
                     .or_else(|_| std::env::var("CHRONON_TEST_REDIS_URL"))
@@ -54,7 +54,7 @@ impl BootstrapSession {
                             "PostgresRedis matrix requires CHRONON_REDIS_URL or CHRONON_TEST_REDIS_URL"
                         )
                     })?;
-                let prefix = format!("chronon_test_{}", uuid::Uuid::new_v4());
+                let prefix = format!("chronon_test_{}", uuid::Uuid::new_v4().simple());
                 let redis = RedisQueueLayer::connect(&redis_url, Some(&prefix)).await?;
                 redis.flush_keys().await?;
                 self.postgres_schema = Some(schema);
