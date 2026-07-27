@@ -53,6 +53,8 @@ Builder `.tick_interval_ms()` overrides `CHRONON_TICK_INTERVAL_MS`. Partition co
 
 ## How to run examples
 
+Navigational index: [`examples/README.md`](examples/README.md) (when-to-use ladder + success checks for every example).
+
 Canonical teaching path (start here). Topology docs:
 [Embedded](https://docs.rs/uf-chronon/latest/chronon/index.html#embedded-one-process) /
 [Coordinator–worker](https://docs.rs/uf-chronon/latest/chronon/index.html#coordinator-worker-split) /

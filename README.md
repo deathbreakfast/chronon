@@ -125,7 +125,7 @@ Enable features explicitly — the public crate ships with **no default features
 
 ### Examples (canonical path)
 
-Full multi-worker runbooks: [`chronon/README.md` — How to run examples](chronon/README.md#how-to-run-examples).
+Full multi-worker runbooks: [`chronon/README.md` — How to run examples](chronon/README.md#how-to-run-examples) · navigational index: [`chronon/examples/README.md`](chronon/examples/README.md).
 
 ```bash
 # 1. Embedded (SQLite file)
