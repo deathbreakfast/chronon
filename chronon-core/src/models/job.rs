@@ -267,9 +267,10 @@ impl Job {
     /// Baseline job with generated `job_id`, `enabled = true`, and
     /// [`ScheduleKind::Cron`] (no expression yet).
     ///
-    /// Populate `schedule_kind`, cron / run-once fields, `params_json`, and
-    /// `actor_json` before upsert. Prefer [`crate::ScriptHandle::job`] /
-    /// [`crate::ScriptHandle::job_with_params`] when the script macro is in use.
+    /// Populate schedule fields via Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`,
+    /// preferred), or set `schedule_kind`, cron / run-once fields, `params_json`, and
+    /// `actor_json` before upsert. [`crate::ScriptHandle::job`] /
+    /// [`crate::ScriptHandle::job_with_params`] only seed baseline rows.
     ///
     /// # Examples
     ///

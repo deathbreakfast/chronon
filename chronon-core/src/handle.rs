@@ -13,13 +13,16 @@ use crate::Result;
 /// function into a handle factory (`fn nightly_cleanup() -> ScriptHandle<…>`) and
 /// moves the body to an internal `__*_impl` entry point used by the executor.
 ///
-/// After building a [`Job`], set [`crate::ScheduleKind`] / cron fields and upsert via
-/// `CoordinatorService` (embedded / coordinator–worker) or `RemoteCoordinatorClient`
-/// (remote HTTP client).
+/// **Preferred scheduling:** build jobs with Chronon's fluent `JobBuilder`
+/// (`chronon_scheduler::JobBuilder`, re-exported from the `chronon` / `uf-chronon` facade)
+/// from this handle, then upsert via `CoordinatorService` or `RemoteCoordinatorClient`.
+/// [`Self::job`] / [`Self::job_with_params`] only seed `script_name` / `params_json` — a
+/// low-level alternate to the fluent builder.
 ///
 /// # Examples
 ///
-/// Build a default [`Job`] from the macro-generated handle, then upsert it:
+/// Seed params with [`Self::job_with_params`] (low-level). Prefer `JobBuilder` in application
+/// code for cron / run-once / manual schedules (see the `chronon` crate schedule docs).
 ///
 /// ```
 /// use chronon_core::{Job, ScriptHandle};
@@ -66,8 +69,8 @@ impl<P> ScriptHandle<P> {
 
     /// Baseline [`Job`] pointing at this script (`Job::new` defaults).
     ///
-    /// Populate schedule fields (`schedule_kind`, `cron_expr`, `next_run_at`, …)
-    /// before upserting via the coordinator service or HTTP API.
+    /// Prefer Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`) for cron / run-once /
+    /// manual scheduling. This method only seeds `job_name` and `script_name`.
     pub fn job(&self, job_name: impl Into<String>) -> Job {
         Job::new(job_name, self.name)
     }
@@ -75,6 +78,8 @@ impl<P> ScriptHandle<P> {
 
 impl<P: Serialize> ScriptHandle<P> {
     /// Baseline [`Job`] with typed params serialized into `params_json`.
+    ///
+    /// Prefer Chronon `JobBuilder::params` for fluent construction.
     pub fn job_with_params(&self, job_name: impl Into<String>, params: &P) -> Result<Job> {
         let mut job = self.job(job_name);
         job.params_json = serde_json::to_value(params).map_err(crate::ChrononError::from)?;

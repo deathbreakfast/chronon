@@ -36,6 +36,7 @@ cargo test --doc -p chronon-backend-sqlite
 cargo test --doc -p chronon-backend-redis
 cargo test --doc -p chronon-runtime
 cargo test --doc -p chronon-scheduler
+# includes JobBuilder fluent construction doctest (preferred schedule entry)
 cargo test --doc -p chronon-executor
 cargo test --doc -p chronon-axum
 
