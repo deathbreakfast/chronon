@@ -43,9 +43,10 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = Job::new("telemetry-demo-job", "telemetry_demo");
-    job.schedule_kind = ScheduleKind::RunOnce;
-    job.next_run_at = Some(Utc::now() - Duration::seconds(60));
+    let job = JobBuilder::new(&telemetry_demo())
+        .name("telemetry-demo-job")
+        .run_once_at(Utc::now() - Duration::seconds(60))
+        .build()?;
     chronon.coordinator_service().upsert_job(job).await?;
 
     chronon.scheduler.init_partitions().await;

@@ -9,7 +9,6 @@ use std::sync::Arc;
 use chrono::{Duration, Utc};
 use chronon::prelude::*;
 use chronon_backend_mem::InMemorySchedulerStore;
-use chronon_core::models::ScheduleKind;
 
 #[chronon::script(name = "tick_demo")]
 #[allow(clippy::unused_async)] // script handlers are always async
@@ -35,9 +34,10 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = Job::new("tick-demo-job", "tick_demo");
-    job.schedule_kind = ScheduleKind::RunOnce;
-    job.next_run_at = Some(Utc::now() - Duration::seconds(60));
+    let job = JobBuilder::new(&tick_demo())
+        .name("tick-demo-job")
+        .run_once_at(Utc::now() - Duration::seconds(60))
+        .build()?;
     chronon.coordinator_service().upsert_job(job).await?;
 
     chronon.scheduler.init_partitions().await;

@@ -8,7 +8,7 @@ Portable DTOs, `SchedulerStore` port, `StoreRouter`, errors, and identity ports 
 - **`SchedulerStore`** — stable async trait for scheduler persistence
 - **`StoreRouter`** — register named stores at host boot
 - **`ScriptContext`**, **`ContextFactory`**, **`JsonScriptContextFactory`**, **`IdentityError`**
-- **`ScriptHandle<P>`** — typed script name handle; `job` / `job_with_params` seed default [`Job`] values
+- **`ScriptHandle<P>`** — typed script name handle; prefer Chronon `JobBuilder` for schedules (`job` / `job_with_params` only seed baseline [`Job`] rows)
 - Coordinator-facing portable types
 
 Third-party crates implement **`SchedulerStore`** only against DTOs exported here.

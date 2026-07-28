@@ -21,8 +21,23 @@ use crate::Result;
 ///
 /// # Examples
 ///
-/// Seed params with [`Self::job_with_params`] (low-level). Prefer `JobBuilder` in application
-/// code for cron / run-once / manual schedules (see the `chronon` crate schedule docs).
+/// Handle identity (construction lives on Chronon `JobBuilder` — see
+/// `cargo run -p uf-chronon --example script_handle_job --features mem`):
+///
+/// ```
+/// use chronon_core::ScriptHandle;
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct NightlyCleanupParams {
+///     retention_days: u32,
+/// }
+///
+/// let handle = ScriptHandle::<NightlyCleanupParams>::new("nightly_cleanup");
+/// assert_eq!(handle.name(), "nightly_cleanup");
+/// ```
+///
+/// Low-level seed (prefer `JobBuilder::params` in application code):
 ///
 /// ```
 /// use chronon_core::{Job, ScriptHandle};
@@ -45,8 +60,6 @@ use crate::Result;
 /// assert_eq!(job.script_name, "nightly_cleanup");
 /// assert_eq!(job.params_json["retention_days"], 7);
 /// ```
-///
-/// Runnable end-to-end sample: `cargo run -p uf-chronon --example script_handle_job --features mem`.
 #[derive(Debug, Clone)]
 pub struct ScriptHandle<P> {
     name: &'static str,
@@ -98,11 +111,11 @@ mod tests {
     }
 
     #[test]
-    fn job_sets_script_name() {
+    fn job_seeds_script_name() {
         let handle = ScriptHandle::<()>::new("demo");
         let job = handle.job("demo-job");
-        assert_eq!(job.job_name, "demo-job");
         assert_eq!(job.script_name, "demo");
+        assert_eq!(job.job_name, "demo-job");
     }
 
     #[test]
@@ -110,7 +123,7 @@ mod tests {
         let handle = ScriptHandle::<DemoParams>::new("demo");
         let job = handle
             .job_with_params("demo-job", &DemoParams { n: 3 })
-            .unwrap();
+            .expect("serialize");
         assert_eq!(job.params_json["n"], 3);
     }
 }

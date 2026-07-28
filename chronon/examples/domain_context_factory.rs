@@ -81,10 +81,11 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = Job::new("domain-report-job", "domain_report");
-    job.schedule_kind = ScheduleKind::RunOnce;
-    job.next_run_at = Some(Utc::now() - Duration::seconds(60));
-    job.actor_json = json!({ "tenant": "acme", "user": "alice", "region": "us-east" });
+    let job = JobBuilder::new(&domain_report())
+        .name("domain-report-job")
+        .run_once_at(Utc::now() - Duration::seconds(60))
+        .with_actor_json(json!({ "tenant": "acme", "user": "alice", "region": "us-east" }))
+        .build()?;
     chronon.coordinator_service().upsert_job(job).await?;
 
     chronon.scheduler.init_partitions().await;
