@@ -42,18 +42,21 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    // Recurring: run every day at 02:00 UTC.
-    let mut nightly = Job::new("nightly-schedule", "nightly_cleanup");
-    nightly.schedule_kind = ScheduleKind::Cron;
-    nightly.cron_expr = Some("0 2 * * *".into());
-    nightly.timezone = Some("UTC".into());
-    nightly.params_json = serde_json::json!({ "retention_days": 7 });
+    // Recurring: run every day at 02:00 UTC (JobBuilder is the preferred schedule API).
+    let nightly = JobBuilder::new(&nightly_cleanup())
+        .name("nightly-schedule")
+        .cron("0 2 * * *")?
+        .timezone("UTC")
+        .params(NightlyCleanupParams { retention_days: 7 })
+        .build()?;
     chronon.coordinator_service().upsert_job(nightly).await?;
 
     // Manual: enqueue an immediate run of the same script.
-    let mut manual = Job::new("cleanup-now", "nightly_cleanup");
-    manual.schedule_kind = ScheduleKind::Manual;
-    manual.params_json = serde_json::json!({ "retention_days": 30 });
+    let manual = JobBuilder::new(&nightly_cleanup())
+        .name("cleanup-now")
+        .manual()
+        .params(NightlyCleanupParams { retention_days: 30 })
+        .build()?;
     let manual_id = manual.job_id.clone();
     chronon.coordinator_service().upsert_job(manual).await?;
     chronon.coordinator_service().run_now(&manual_id).await?;

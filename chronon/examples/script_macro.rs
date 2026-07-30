@@ -34,10 +34,11 @@ async fn main() -> chronon::Result<()> {
 
     assert!(chronon.executor().script_count() >= 1);
 
-    let mut job = Job::new("nightly-job", "nightly_cleanup");
-    job.schedule_kind = ScheduleKind::RunOnce;
-    job.params_json = serde_json::json!({ "retention_days": 7 });
-    job.next_run_at = Some(Utc::now() - Duration::seconds(60));
+    let job = JobBuilder::new(&nightly_cleanup())
+        .name("nightly-job")
+        .run_once_at(Utc::now() - Duration::seconds(60))
+        .params(NightlyCleanupParams { retention_days: 7 })
+        .build()?;
     chronon.coordinator_service().upsert_job(job).await?;
 
     chronon.scheduler.init_partitions().await;

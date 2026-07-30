@@ -277,7 +277,8 @@ async fn main() -> chronon::Result<()> {
     let inner: Arc<dyn SchedulerStore> = Arc::new(InMemorySchedulerStore::new());
     let store: Arc<dyn SchedulerStore> = Arc::new(AuditingSchedulerStore::new(inner));
 
-    // Fail-closed proof: a blank job_name is rejected before it reaches the wrapped store.
+    // Fail-closed proof: blank job_name is rejected before it reaches the wrapped store.
+    // (JobBuilder requires a name, so this deliberately uses Job::new + mutate.)
     let mut blank_named = Job::new("placeholder", "audited_job");
     blank_named.job_name = String::new();
     assert!(store.upsert_job(&blank_named).await.is_err());
@@ -289,9 +290,10 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = Job::new("audited-job", "audited_job");
-    job.schedule_kind = ScheduleKind::RunOnce;
-    job.next_run_at = Some(Utc::now() - Duration::seconds(60));
+    let job = JobBuilder::new(&audited_job())
+        .name("audited-job")
+        .run_once_at(Utc::now() - Duration::seconds(60))
+        .build()?;
     chronon.coordinator_service().upsert_job(job).await?;
 
     chronon.scheduler.init_partitions().await;

@@ -5,6 +5,7 @@
 //!
 //! # Documentation map
 //!
+//! - **Fluent job construction (preferred)** — [`JobBuilder`]
 //! - **Embedded / coordinator ticks** — [`Scheduler`], [`run_coordinator_tick_loop`]
 //! - **Cron parsing** — [`CronExpr`]
 //! - **Horizontal scale-out** — [`PartitionAssigner`], [`try_acquire_leader`]
@@ -38,6 +39,7 @@
 
 mod cron;
 mod env;
+mod job_builder;
 mod leader;
 mod partition_assigner;
 mod partitioning;
@@ -45,6 +47,7 @@ mod tick;
 mod tick_loop;
 
 pub use cron::CronExpr;
+pub use job_builder::JobBuilder;
 pub use leader::{am_i_leader, current_leader, renew_leader_lease, try_acquire_leader};
 pub use partition_assigner::PartitionAssigner;
 pub use partitioning::{

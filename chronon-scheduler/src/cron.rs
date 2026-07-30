@@ -6,9 +6,9 @@ use chronon_core::{ChrononError, Result};
 
 /// A parsed cron expression ready for next-run calculations.
 ///
-/// Used when upserting [`chronon_core::Job`] rows with [`chronon_core::ScheduleKind::Cron`]:
-/// set `job.cron_expr` (and optional `timezone`); `CoordinatorService::upsert_job` calls
-/// [`Self::parse`] and stores `next_run_at`.
+/// Used when upserting [`chronon_core::Job`] rows with [`chronon_core::ScheduleKind::Cron`].
+/// Prefer [`crate::JobBuilder::cron`] to validate the expression and set `next_run_at` when
+/// constructing jobs; `CoordinatorService::upsert_job` also calls [`Self::parse`] as needed.
 ///
 /// Syntax: standard five-field cron (`minute hour day-of-month month day-of-week`). An optional
 /// sixth field enables seconds (`CronExpr::has_seconds`). Timezone names follow `chrono-tz`

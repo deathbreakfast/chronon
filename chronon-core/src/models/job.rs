@@ -12,26 +12,21 @@ use serde_json::Value;
 /// | [`Self::RunOnce`] | Yes | `next_run_at` or `run_once_at` | One-shot deferred work |
 /// | [`Self::Manual`] | **No** | — | `CoordinatorService::run_now` or HTTP `POST /jobs/run_now` |
 ///
-/// Persist via coordinator upsert; cron next-fire is computed there when
-/// `schedule_kind == Cron`. See the `chronon` crate getting-started §5.
+/// Prefer Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`, re-exported from the
+/// `chronon` / `uf-chronon` facade) to set schedule kind — `.cron` / `.run_once_at` /
+/// `.manual` — rather than assigning these variants by hand. Persist via coordinator upsert;
+/// cron next-fire is computed there when `schedule_kind == Cron`. See the `chronon` crate
+/// getting-started §5.
 ///
 /// # Examples
 ///
+/// Persisted shape after a builder (or low-level field assignment):
+///
 /// ```
-/// use chronon_core::{Job, ScheduleKind};
+/// use chronon_core::ScheduleKind;
 ///
-/// let mut cron = Job::new("nightly", "cleanup");
-/// cron.schedule_kind = ScheduleKind::Cron;
-/// cron.cron_expr = Some("0 2 * * *".into());
-/// cron.timezone = Some("UTC".into());
-///
-/// let mut once = Job::new("migrate-once", "migrate");
-/// once.schedule_kind = ScheduleKind::RunOnce;
-/// once.next_run_at = Some(chrono::Utc::now());
-///
-/// let mut manual = Job::new("cleanup-now", "cleanup");
-/// manual.schedule_kind = ScheduleKind::Manual;
-/// assert_eq!(manual.schedule_kind, ScheduleKind::Manual);
+/// assert_eq!(ScheduleKind::Cron, ScheduleKind::default());
+/// assert_ne!(ScheduleKind::Manual, ScheduleKind::RunOnce);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -141,9 +136,13 @@ pub struct MisfirePolicy {
 
 /// Scheduled work unit: binds a **script name** to a [`ScheduleKind`] and params.
 ///
-/// Create with [`Job::new`], set schedule fields, then persist with
-/// `CoordinatorService::upsert_job` (or HTTP upsert / `RemoteCoordinatorClient`).
-/// Typed defaults: [`crate::ScriptHandle`].
+/// **Preferred construction:** Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`,
+/// re-exported from the `chronon` / `uf-chronon` facade) from a [`crate::ScriptHandle`],
+/// then persist with `CoordinatorService::upsert_job` (or HTTP upsert /
+/// `RemoteCoordinatorClient`).
+///
+/// [`Job::new`] / [`crate::ScriptHandle::job`] / [`crate::ScriptHandle::job_with_params`]
+/// only seed baseline rows — a low-level alternate to the fluent builder.
 ///
 /// | Field group | Purpose |
 /// |-------------|---------|
@@ -154,19 +153,18 @@ pub struct MisfirePolicy {
 ///
 /// # Examples
 ///
-/// ```
-/// use chronon_core::{Job, ScheduleKind};
+/// Baseline row (no schedule yet). Prefer `JobBuilder` for cron / run-once / manual:
 ///
-/// let mut job = Job::new("nightly-cleanup", "nightly_cleanup");
-/// job.schedule_kind = ScheduleKind::Cron;
-/// job.cron_expr = Some("0 2 * * *".into());
-/// job.timezone = Some("UTC".into());
-/// job.params_json = serde_json::json!({ "retention_days": 7 });
+/// ```
+/// use chronon_core::Job;
+///
+/// let job = Job::new("nightly-cleanup", "nightly_cleanup");
 /// assert!(job.enabled);
 /// assert_eq!(job.script_name, "nightly_cleanup");
+/// assert_eq!(job.schedule_kind, chronon_core::ScheduleKind::Cron);
 /// ```
 ///
-/// Runnable: `cargo run -p uf-chronon --example script_macro --features mem`.
+/// Runnable: `cargo run -p uf-chronon --example script_handle_job --features mem`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     /// Unique identifier (UUID).
@@ -267,9 +265,10 @@ impl Job {
     /// Baseline job with generated `job_id`, `enabled = true`, and
     /// [`ScheduleKind::Cron`] (no expression yet).
     ///
-    /// Populate `schedule_kind`, cron / run-once fields, `params_json`, and
-    /// `actor_json` before upsert. Prefer [`crate::ScriptHandle::job`] /
-    /// [`crate::ScriptHandle::job_with_params`] when the script macro is in use.
+    /// Populate schedule fields via Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`,
+    /// preferred), or set `schedule_kind`, cron / run-once fields, `params_json`, and
+    /// `actor_json` before upsert. [`crate::ScriptHandle::job`] /
+    /// [`crate::ScriptHandle::job_with_params`] only seed baseline rows.
     ///
     /// # Examples
     ///

@@ -9,6 +9,8 @@
 //! ## Features
 //!
 //! - **Typed scripts** — `#[chronon::script]` registers handlers with inventory; params stay typed.
+//! - **Fluent job construction** — preferred [`JobBuilder`] for cron / run-once / manual schedules
+//!   (seed helpers on [`ScriptHandle`] remain as a low-level alternate).
 //! - **Durable jobs and runs** — schedule config, revisions, and execution history on
 //!   [`SchedulerStore`](chronon_core::SchedulerStore).
 //! - **Upsert-by-name** — HTTP/job upsert preserves `job_id` when `job_name` already exists and
@@ -35,8 +37,8 @@
 //! # Getting started
 //!
 //! You always define scripts with `#[chronon::script]` and schedule via the generated
-//! [`ScriptHandle`] (`nightly_cleanup().job_with_params(...)`, then
-//! [`CoordinatorService::upsert_job`] / [`CoordinatorService::run_now`]). What changes is
+//! [`ScriptHandle`] with [`JobBuilder`] (preferred), then
+//! [`CoordinatorService::upsert_job`] / [`CoordinatorService::run_now`]. What changes is
 //! **which process ticks the schedule and which process executes scripts**.
 //!
 //! ## Choose a topology
@@ -100,13 +102,12 @@
 //!     .auto_registry()
 //!     .build()?;
 //!
-//! let mut job = nightly_cleanup().job_with_params(
-//!     "nightly-schedule",
-//!     &NightlyCleanupParams { retention_days: 7 },
-//! )?;
-//! job.schedule_kind = ScheduleKind::Cron;
-//! job.cron_expr = Some("0 2 * * *".into());
-//! job.timezone = Some("UTC".into());
+//! let job = JobBuilder::new(&nightly_cleanup())
+//!     .name("nightly-schedule")
+//!     .cron("0 2 * * *")?
+//!     .timezone("UTC")
+//!     .params(NightlyCleanupParams { retention_days: 7 })
+//!     .build()?;
 //! chronon.coordinator_service().upsert_job(job).await?;
 //! // chronon.scheduler.init_partitions().await;
 //! // chronon.run().await?;
@@ -189,7 +190,7 @@
 //! authentication** (Chronon does not authenticate these routes). Sketches:
 //! `axum_host` (`mem,axum`), `axum_auth_wrap` (Tower Bearer demo). See repository `SECURITY.md`.
 //!
-//! **App binary** — build a [`Job`](chronon_core::Job) from your [`ScriptHandle`], then call
+//! **App binary** — prefer [`JobBuilder`] from your [`ScriptHandle`], then call
 //! [`RemoteCoordinatorClient`] (do not call [`Chronon::run`]):
 //!
 //! ```ignore
@@ -199,11 +200,11 @@
 //!     .unwrap_or_else(|| "http://127.0.0.1:8080".into());
 //! let client = RemoteCoordinatorClient::new(base);
 //!
-//! let mut job = nightly_cleanup().job_with_params(
-//!     "nightly-schedule",
-//!     &NightlyCleanupParams { retention_days: 7 },
-//! )?;
-//! job.schedule_kind = ScheduleKind::Manual;
+//! let job = JobBuilder::new(&nightly_cleanup())
+//!     .name("nightly-schedule")
+//!     .manual()
+//!     .params(NightlyCleanupParams { retention_days: 7 })
+//!     .build()?;
 //! client.upsert_job(job.clone()).await?;
 //! let _run_id = client.run_now(&job.job_id).await?;
 //! ```
@@ -245,35 +246,37 @@
 //!
 //! ## 5. Schedule and trigger jobs
 //!
-//! Prefer the generated handle over stringly `Job::new("…", "script_name")`. Set
-//! [`ScheduleKind`](chronon_core::ScheduleKind) on the returned [`Job`](chronon_core::Job):
+//! **Preferred:** build a [`Job`](chronon_core::Job) with [`JobBuilder`] from the generated
+//! [`ScriptHandle`], then upsert. This validates cron and sets `next_run_at` for you.
 //!
-//! | [`ScheduleKind`](chronon_core::ScheduleKind) | Behavior |
-//! |----------------------------------------------|----------|
-//! | `Cron` | Recurring; set `cron_expr` (+ optional `timezone`) |
-//! | `RunOnce` | Fires when `next_run_at` is due |
-//! | `Manual` | Never due for tick — only [`CoordinatorService::run_now`] |
+//! | [`ScheduleKind`](chronon_core::ScheduleKind) | Builder method | Behavior |
+//! |----------------------------------------------|----------------|----------|
+//! | `Cron` | [`.cron`](JobBuilder::cron) (+ optional [`.timezone`](JobBuilder::timezone)) | Recurring |
+//! | `RunOnce` | [`.run_once_at`](JobBuilder::run_once_at) | Fires when `next_run_at` is due |
+//! | `Manual` | [`.manual`](JobBuilder::manual) | Never due for tick — only [`CoordinatorService::run_now`] |
 //!
 //! ```ignore
 //! use chronon::prelude::*;
 //!
-//! let mut nightly = nightly_cleanup().job_with_params(
-//!     "nightly-schedule",
-//!     &NightlyCleanupParams { retention_days: 7 },
-//! )?;
-//! nightly.schedule_kind = ScheduleKind::Cron;
-//! nightly.cron_expr = Some("0 2 * * *".into());
+//! let nightly = JobBuilder::new(&nightly_cleanup())
+//!     .name("nightly-schedule")
+//!     .cron("0 2 * * *")?
+//!     .params(NightlyCleanupParams { retention_days: 7 })
+//!     .build()?;
 //! chronon.coordinator_service().upsert_job(nightly).await?;
 //!
-//! let mut manual = nightly_cleanup().job_with_params(
-//!     "cleanup-now",
-//!     &NightlyCleanupParams { retention_days: 30 },
-//! )?;
-//! manual.schedule_kind = ScheduleKind::Manual;
+//! let manual = JobBuilder::new(&nightly_cleanup())
+//!     .name("cleanup-now")
+//!     .manual()
+//!     .params(NightlyCleanupParams { retention_days: 30 })
+//!     .build()?;
 //! let id = manual.job_id.clone();
 //! chronon.coordinator_service().upsert_job(manual).await?;
 //! chronon.coordinator_service().run_now(&id).await?;
 //! ```
+//!
+//! Low-level alternate: [`ScriptHandle::job_with_params`] then mutate schedule fields on the
+//! [`Job`](chronon_core::Job) — prefer [`JobBuilder`] in new code.
 //!
 //! Cron uses standard five-field syntax (optional sixth field for seconds). Parse helpers:
 //! [`CronExpr`]. Runnable: `script_handle_job`, `run_now`, `embedded_tick`.
@@ -403,7 +406,7 @@ pub mod prelude {
         builder, resolve_remote_base_url, Chronon, ChrononBuilder, CoordinatorService,
         DeploymentShape, JobSummary, RemoteCoordinatorClient,
     };
-    pub use chronon_scheduler::{CronExpr, Scheduler, SchedulerConfig};
+    pub use chronon_scheduler::{CronExpr, JobBuilder, Scheduler, SchedulerConfig};
 }
 
 pub use chronon_core as core;
@@ -413,7 +416,7 @@ pub use chronon_runtime::{
     builder, resolve_remote_base_url, Chronon, ChrononBuilder, CoordinatorService, DeploymentShape,
     RemoteCoordinatorClient,
 };
-pub use chronon_scheduler::CronExpr;
+pub use chronon_scheduler::{CronExpr, JobBuilder};
 
 #[cfg(feature = "axum")]
 pub use chronon_axum::{

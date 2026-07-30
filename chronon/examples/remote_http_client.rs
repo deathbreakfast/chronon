@@ -80,8 +80,10 @@ async fn main() -> chronon::Result<()> {
     // Brief yield so the accept loop is listening before the first HTTP call.
     tokio::task::yield_now().await;
 
-    let mut job = Job::new("remote-demo-job", "remote_demo");
-    job.schedule_kind = ScheduleKind::Manual;
+    let job = JobBuilder::new(&ScriptHandle::<()>::new("remote_demo"))
+        .name("remote-demo-job")
+        .manual()
+        .build()?;
     client.upsert_job(job).await?;
     // Upsert-by-name may assign the server job_id; resolve it before run_now.
     let jobs = client.list_jobs().await?;

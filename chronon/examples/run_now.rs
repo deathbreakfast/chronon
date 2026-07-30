@@ -35,20 +35,20 @@ async fn main() -> chronon::Result<()> {
         .auto_registry()
         .build()?;
 
-    let mut job = Job::new("manual-job", "manual_probe");
-    job.schedule_kind = ScheduleKind::Manual;
-    chronon
-        .coordinator_service()
-        .upsert_job(job.clone())
-        .await?;
+    let job = JobBuilder::new(&manual_probe())
+        .name("manual-job")
+        .manual()
+        .build()?;
+    let job_id = job.job_id.clone();
+    chronon.coordinator_service().upsert_job(job).await?;
 
-    let run_id = chronon.coordinator_service().run_now(&job.job_id).await?;
+    let run_id = chronon.coordinator_service().run_now(&job_id).await?;
     let run = store
         .get_run(&run_id)
         .await?
         .ok_or_else(|| chronon::ChrononError::Internal("run_now should persist a run".into()))?;
     assert_eq!(run.status, RunStatus::Queued);
-    assert_eq!(run.job_id.as_deref(), Some(job.job_id.as_str()));
+    assert_eq!(run.job_id.as_deref(), Some(job_id.as_str()));
 
     eprintln!("run_now enqueued run_id={run_id}");
     Ok(())

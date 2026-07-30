@@ -1,6 +1,10 @@
 # Chronon examples
 
-Runnable proofs for embedded scheduling, coordinator–worker splits, and remote HTTP clients. The canonical path below matches the crate README; use secondary examples when you need a specific backend, HTTP mount, or API surface.
+Runnable proofs for embedded scheduling, coordinator–worker splits, and remote HTTP clients.
+**Preferred job construction:** [`JobBuilder`](https://docs.rs/uf-chronon/latest/chronon/struct.JobBuilder.html)
+from a typed `ScriptHandle` (see [`script_handle_job.rs`](script_handle_job.rs) and the other
+schedule examples below). The canonical path matches the crate README; use secondary examples
+when you need a specific backend, HTTP mount, or API surface.
 
 Full multi-terminal runbooks: [`../README.md` — How to run examples](../README.md#how-to-run-examples).
 
@@ -32,7 +36,7 @@ Production-shaped variant: `coordinator_daemon` + `worker_daemon` with `postgres
 
 ### 3. Remote HTTP client — [`remote_http_client.rs`](remote_http_client.rs)
 
-App schedules through `RemoteCoordinatorClient` with no local tick loop — useful when only the coordinator host runs Chronon loops.
+App schedules through `RemoteCoordinatorClient` with no local tick loop — useful when only the coordinator host runs Chronon loops. Builds the job with `JobBuilder::manual()`.
 
 ```bash
 cargo run -p uf-chronon --example remote_http_client --features mem,axum
@@ -44,10 +48,10 @@ Success: `RemoteCoordinatorClient upsert + run_now ok — run_id=…`.
 
 | Example | When you'd open it | Command | Success signal |
 |---------|-------------------|---------|----------------|
-| [`script_macro.rs`](script_macro.rs) | `#[chronon::script]` + tick enqueue | `cargo run -p uf-chronon --example script_macro --features mem` | `script registered; tick enqueued … run(s)` |
-| [`script_handle_job.rs`](script_handle_job.rs) | Build a `Job` handle without macro sugar | `cargo run -p uf-chronon --example script_handle_job --features mem` | `handle-built job; tick enqueued … run(s)` |
-| [`run_now.rs`](run_now.rs) | Manual immediate run of a cron job | `cargo run -p uf-chronon --example run_now --features mem` | `run_now enqueued run_id=…` |
-| [`embedded_tick.rs`](embedded_tick.rs) | Tick loop enqueue without script registry noise | `cargo run -p uf-chronon --example embedded_tick --features mem` | `tick enqueued … run(s)` |
+| [`script_handle_job.rs`](script_handle_job.rs) | Preferred `JobBuilder` + typed `ScriptHandle` | `cargo run -p uf-chronon --example script_handle_job --features mem` | `handle-built job; tick enqueued … run(s)` |
+| [`script_macro.rs`](script_macro.rs) | `#[chronon::script]` + `JobBuilder` + tick enqueue | `cargo run -p uf-chronon --example script_macro --features mem` | `script registered; tick enqueued … run(s)` |
+| [`run_now.rs`](run_now.rs) | Manual immediate run via `JobBuilder::manual` + `run_now` | `cargo run -p uf-chronon --example run_now --features mem` | `run_now enqueued run_id=…` |
+| [`embedded_tick.rs`](embedded_tick.rs) | Tick loop enqueue with `JobBuilder::run_once_at` | `cargo run -p uf-chronon --example embedded_tick --features mem` | `tick enqueued … run(s)` |
 | [`store_router_boot.rs`](store_router_boot.rs) | Global mem store router wiring | `cargo run -p uf-chronon --example store_router_boot --features mem` | `Chronon booted from global mem store` |
 | [`telemetry_console.rs`](telemetry_console.rs) | Install `ConsoleSink` and see scheduler telemetry as `tracing` lines | `cargo run -p uf-chronon --example telemetry_console --features mem,telemetry-console` | `target="chronon_telemetry"` lines, then `tick enqueued … run(s)` |
 | [`domain_context_factory.rs`](domain_context_factory.rs) | Custom `ContextFactory` injecting tenant/user/region provenance, fail-closed on missing fields | `cargo run -p uf-chronon --example domain_context_factory --features mem` | `allow ok, missing-tenant denied (fail closed)` |
