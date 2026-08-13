@@ -137,6 +137,13 @@ macro_rules! delegate_scheduler_store {
                     .await
             }
 
+            async fn reclaim_expired_run_leases(
+                &self,
+                now: ::chrono::DateTime<::chrono::Utc>,
+            ) -> ::chronon_core::Result<Vec<String>> {
+                self.$field.reclaim_expired_run_leases(now).await
+            }
+
             async fn append_revision(
                 &self,
                 revision: &::chronon_core::models::JobRevision,

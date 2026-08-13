@@ -6,7 +6,8 @@ use std::time::Duration;
 use chrono::Utc;
 use chronon_core::models::{RunStatus, Worker, WorkerStatus};
 use chronon_core::store::SchedulerStore;
-use chronon_executor::{execute_script, ExecuteScriptRequest, Executor};
+use chronon_core::ChrononError;
+use chronon_executor::{execute_script, ExecuteScriptOutcome, ExecuteScriptRequest, Executor};
 use chronon_scheduler::{
     run_worker_lease_renew_secs, run_worker_lease_ttl_secs, worker_concurrency_from_env,
 };
@@ -16,6 +17,8 @@ use tokio::time::{sleep, timeout};
 use tracing::{warn, Instrument};
 
 use crate::env::env_flag;
+use crate::lease_guard::AbortOnDrop;
+use crate::reclaim::run_reclaim_loop;
 use crate::retry::finalize_failed_run;
 
 fn worker_row_id(worker_id: &str) -> String {
@@ -37,6 +40,49 @@ async fn warn_update_run(
 ) {
     if let Err(e) = store.update_run(run).await {
         warn!(run_id = %run.run_id, error = %e, "{msg}");
+    }
+}
+
+/// Execute a script in a supervised task so handler panics become [`RunStatus::Failed`].
+async fn execute_script_catch_panic(
+    executor: &Executor,
+    script_name: String,
+    actor_json: serde_json::Value,
+    params_json: serde_json::Value,
+    job_name: String,
+    run_id: String,
+) -> ExecuteScriptOutcome {
+    let registry = Arc::clone(&executor.registry);
+    let context_factory = Arc::clone(&executor.context_factory);
+    let telemetry = Arc::clone(&executor.telemetry);
+    let run_id_log = run_id.clone();
+    match tokio::spawn(async move {
+        execute_script(ExecuteScriptRequest {
+            registry: &registry,
+            context_factory: &context_factory,
+            telemetry: &telemetry,
+            script_name: &script_name,
+            actor_json: &actor_json,
+            params_json,
+            job_name: &job_name,
+            run_id: &run_id,
+        })
+        .await
+    })
+    .await
+    {
+        Ok(outcome) => outcome,
+        Err(join_err) if join_err.is_panic() => {
+            warn!(run_id = %run_id_log, "handler panicked");
+            ExecuteScriptOutcome {
+                result: Err(ChrononError::Internal("handler panicked".into())),
+                logs: chronon_telemetry::CapturedLogs::default(),
+            }
+        }
+        Err(_) => ExecuteScriptOutcome {
+            result: Err(ChrononError::Internal("handler task cancelled".into())),
+            logs: chronon_telemetry::CapturedLogs::default(),
+        },
     }
 }
 
@@ -115,22 +161,26 @@ async fn worker_slot(
                     }
                 }
             });
+            let _renew_guard = AbortOnDrop::new(renew_handle);
 
             let started = Utc::now();
-            let exec_fut = execute_script(ExecuteScriptRequest {
-                registry: &executor.registry,
-                context_factory: &executor.context_factory,
-                telemetry: &executor.telemetry,
-                script_name: &run.script_name,
-                actor_json: &run.actor_json,
-                params_json: run.params_json.clone(),
-                job_name: &job.job_name,
-                run_id: &run.run_id,
-            });
+            let script_name = run.script_name.clone();
+            let actor_json = run.actor_json.clone();
+            let params_json = run.params_json.clone();
+            let job_name = job.job_name.clone();
+            let run_id_exec = run.run_id.clone();
 
             let (status_result, logs) = match job.timeout_ms {
                 Some(ms) if ms > 0 => {
-                    match timeout(Duration::from_millis(ms as u64), exec_fut).await {
+                    let exec = execute_script_catch_panic(
+                        &executor,
+                        script_name,
+                        actor_json,
+                        params_json,
+                        job_name,
+                        run_id_exec,
+                    );
+                    match timeout(Duration::from_millis(ms as u64), exec).await {
                         Ok(outcome) => (
                             outcome
                                 .result
@@ -144,7 +194,15 @@ async fn worker_slot(
                     }
                 }
                 _ => {
-                    let outcome = exec_fut.await;
+                    let outcome = execute_script_catch_panic(
+                        &executor,
+                        script_name,
+                        actor_json,
+                        params_json,
+                        job_name,
+                        run_id_exec,
+                    )
+                    .await;
                     (
                         outcome
                             .result
@@ -153,7 +211,6 @@ async fn worker_slot(
                     )
                 }
             };
-            renew_handle.abort();
 
             let duration_ms = (Utc::now() - started).num_milliseconds();
             match status_result {
@@ -238,6 +295,14 @@ pub async fn run_worker_loop(
         let wid = format!("{worker_id}:{i}");
         tokio::spawn(async move {
             worker_slot(store, executor, telemetry, pool, wid).await;
+        });
+    }
+
+    {
+        let store = Arc::clone(&store);
+        let shutdown = Arc::clone(&shutdown);
+        tokio::spawn(async move {
+            run_reclaim_loop(store, shutdown).await;
         });
     }
 

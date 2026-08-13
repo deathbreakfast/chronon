@@ -159,3 +159,25 @@ pub(super) fn renew_run_lease(
     run.claim_lease_until = Some(now + Duration::seconds(lease_ttl_secs));
     Ok(true)
 }
+
+pub(super) fn reclaim_expired_run_leases(
+    store: &InMemorySchedulerStore,
+    now: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let mut runs = store.runs.write();
+    let mut reclaimed = Vec::new();
+    for (id, run) in runs.iter_mut() {
+        if !matches!(run.status, RunStatus::Claimed | RunStatus::Running) {
+            continue;
+        }
+        if run.claim_lease_until.is_none_or(|u| u > now) {
+            continue;
+        }
+        run.status = RunStatus::Queued;
+        run.claimed_by = None;
+        run.claim_lease_until = None;
+        run.started_at = None;
+        reclaimed.push(id.clone());
+    }
+    Ok(reclaimed)
+}

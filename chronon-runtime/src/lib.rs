@@ -21,6 +21,8 @@ mod coordinator_service;
 mod embedded;
 mod env;
 mod events;
+mod lease_guard;
+mod reclaim;
 mod remote_client;
 mod retry;
 mod runtime;

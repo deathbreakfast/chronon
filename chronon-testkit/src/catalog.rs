@@ -24,6 +24,7 @@ macro_rules! invoke_catalog_scenario_ids {
             not_due_no_enqueue,
             pause_resume_smoke,
             script_run_failure,
+            script_run_panic_failed,
             run_now_smoke,
             job_revisions_smoke,
             counting_exactly_once,
@@ -143,6 +144,12 @@ macro_rules! catalog_entries {
                 ScenarioSpec::script_run_failure,
             ),
             entry(
+                "script_run_panic_failed",
+                PathKind::Sad,
+                $deployment,
+                ScenarioSpec::script_run_panic_failed,
+            ),
+            entry(
                 "run_now_smoke",
                 PathKind::Happy,
                 $deployment,
@@ -176,7 +183,7 @@ macro_rules! catalog_entries {
 }
 
 /// Full embedded deployment catalog (PR CI default).
-static EMBEDDED_CATALOG: [CatalogEntry; 14] = catalog_entries!(CatalogDeployment::Embedded);
+static EMBEDDED_CATALOG: [CatalogEntry; 15] = catalog_entries!(CatalogDeployment::Embedded);
 
 /// Embedded deployment catalog slice.
 #[must_use]
@@ -185,7 +192,7 @@ pub fn embedded_catalog() -> &'static [CatalogEntry] {
 }
 
 /// Coordinator–worker split deployment catalog (full parity with embedded).
-static COORDINATOR_CATALOG: [CatalogEntry; 14] =
+static COORDINATOR_CATALOG: [CatalogEntry; 15] =
     catalog_entries!(CatalogDeployment::CoordinatorWorker);
 
 /// Coordinator–worker deployment catalog slice.

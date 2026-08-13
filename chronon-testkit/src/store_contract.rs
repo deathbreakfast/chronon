@@ -36,6 +36,8 @@ pub async fn run_store_contract(store: Arc<dyn SchedulerStore>) -> Result<()> {
     try_claim_run_once_lease_contention(store_ref).await?;
     claim_next_queued_orders_by_scheduled_for_and_filters_pool(store_ref).await?;
     renew_run_lease_requires_matching_worker(store_ref).await?;
+    reclaim_expired_running_run_allows_reclaim(store_ref).await?;
+    reclaim_skips_active_non_expired_lease(store_ref).await?;
     leader_election_blocks_second_instance(store_ref).await?;
     pause_and_resume_job(store_ref).await?;
     script_roundtrip(store_ref).await?;
@@ -210,6 +212,60 @@ async fn renew_run_lease_requires_matching_worker(store: &dyn SchedulerStore) ->
 
     assert!(store.renew_run_lease(&run_id, "worker-a", now, 60).await?);
     assert!(!store.renew_run_lease(&run_id, "worker-b", now, 60).await?);
+    Ok(())
+}
+
+async fn reclaim_expired_running_run_allows_reclaim(store: &dyn SchedulerStore) -> Result<()> {
+    let now = Utc::now();
+    let mut run = queued_run("job-reclaim", Some("pool"), now);
+    let run_id = run.run_id.clone();
+    store.create_run(&run).await?;
+
+    let claimed = store
+        .claim_next_queued("pool", "worker-a", now, 30)
+        .await?
+        .expect("claimed");
+    assert_eq!(claimed.run_id, run_id);
+
+    run = store.get_run(&run_id).await?.expect("run");
+    run.status = RunStatus::Running;
+    run.claim_lease_until = Some(now - Duration::seconds(1));
+    store.update_run(&run).await?;
+
+    let reclaimed = store.reclaim_expired_run_leases(now).await?;
+    assert!(
+        reclaimed.iter().any(|id| id == &run_id),
+        "expected {run_id} in {reclaimed:?}"
+    );
+
+    let again = store
+        .claim_next_queued("pool", "worker-b", now, 30)
+        .await?
+        .expect("reclaimed run claimable");
+    assert_eq!(again.run_id, run_id);
+    assert_eq!(again.status, RunStatus::Claimed);
+    assert_eq!(again.claimed_by.as_deref(), Some("worker-b"));
+    Ok(())
+}
+
+async fn reclaim_skips_active_non_expired_lease(store: &dyn SchedulerStore) -> Result<()> {
+    let now = Utc::now();
+    let run = queued_run("job-active-lease", Some("pool"), now);
+    let run_id = run.run_id.clone();
+    store.create_run(&run).await?;
+
+    store
+        .claim_next_queued("pool", "worker-a", now, 300)
+        .await?
+        .expect("claimed");
+
+    let reclaimed = store.reclaim_expired_run_leases(now).await?;
+    assert!(
+        !reclaimed.iter().any(|id| id == &run_id),
+        "must not steal active lease"
+    );
+
+    assert!(store.renew_run_lease(&run_id, "worker-a", now, 300).await?);
     Ok(())
 }
 

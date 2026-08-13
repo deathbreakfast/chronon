@@ -396,3 +396,34 @@ pub(crate) async fn renew_run_lease(
     };
     Ok(rows > 0)
 }
+
+pub(crate) async fn reclaim_expired_run_leases(
+    store: &SqlSchedulerStore,
+    now: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let sql = bind_sql(
+        store.dialect,
+        "UPDATE chronon_run SET
+            status = 'queued',
+            claimed_by = NULL,
+            claim_lease_until = NULL,
+            started_at = NULL
+         WHERE status IN ('claimed', 'running')
+           AND claim_lease_until IS NOT NULL
+           AND claim_lease_until <= ?
+         RETURNING run_id",
+    );
+    let rows: Vec<(String,)> = match &store.pool {
+        crate::SqlPool::Sqlite(pool) => sqlx::query_as(&sql)
+            .bind(now)
+            .fetch_all(pool)
+            .await
+            .map_err(map_err)?,
+        crate::SqlPool::Postgres(pool) => sqlx::query_as(&sql)
+            .bind(now)
+            .fetch_all(pool)
+            .await
+            .map_err(map_err)?,
+    };
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}

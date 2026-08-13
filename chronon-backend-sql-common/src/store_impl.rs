@@ -112,6 +112,10 @@ impl SchedulerStore for SqlSchedulerStore {
         runs::renew_run_lease(self, run_id, worker_id, now, lease_ttl_secs).await
     }
 
+    async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>> {
+        runs::reclaim_expired_run_leases(self, now).await
+    }
+
     async fn append_revision(&self, revision: &JobRevision) -> Result<()> {
         coordinator::append_revision(self, revision).await
     }

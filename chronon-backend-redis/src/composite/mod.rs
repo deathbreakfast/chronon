@@ -194,6 +194,19 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
             .await
     }
 
+    async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>> {
+        let ids = self.sql.reclaim_expired_run_leases(now).await?;
+        for run_id in &ids {
+            if let Some(run) = self.sql.get_run(run_id).await? {
+                let pool = run_pool_key(run.pool_id.as_deref());
+                self.redis
+                    .enqueue_run(pool, &run.run_id, run.scheduled_for)
+                    .await?;
+            }
+        }
+        Ok(ids)
+    }
+
     async fn append_revision(&self, revision: &chronon_core::models::JobRevision) -> Result<()> {
         self.sql.append_revision(revision).await
     }

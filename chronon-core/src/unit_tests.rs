@@ -81,6 +81,9 @@ impl SchedulerStore for EmptyStore {
     async fn renew_run_lease(&self, _: &str, _: &str, _: DateTime<Utc>, _: i64) -> Result<bool> {
         Ok(false)
     }
+    async fn reclaim_expired_run_leases(&self, _: DateTime<Utc>) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
     async fn append_revision(&self, _: &JobRevision) -> Result<()> {
         Ok(())
     }

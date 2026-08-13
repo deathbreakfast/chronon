@@ -135,9 +135,17 @@ Download `coverage-lcov` from the GitHub Actions run artifacts for the CI report
 ## Coverage notes
 
 - Behavioral coverage matrix: [`chronon-e2e/README.md`](../chronon-e2e/README.md)
-- Shared store contract: [`chronon-testkit/src/store_contract.rs`](../chronon-testkit/src/store_contract.rs)
-- Scenario catalog: [`chronon-testkit/src/catalog.rs`](../chronon-testkit/src/catalog.rs)
+- Shared store contract: [`chronon-testkit/src/store_contract.rs`](../chronon-testkit/src/store_contract.rs) (includes expired `running` reclaim)
+- Scenario catalog: [`chronon-testkit/src/catalog.rs`](../chronon-testkit/src/catalog.rs) (`script_run_panic_failed` — panic → `Failed`)
 - Trait `# Contract` sections on [`SchedulerStore`](../chronon-core/src/store.rs)
+
+```bash
+# Store contracts (mem/sqlite)
+cargo test -p chronon-testkit --test store_contracts
+
+# Catalog panic durability (mem embedded — via chronon-e2e matrix)
+cargo test -p chronon-e2e script_run_panic_failed -- --include-ignored
+```
 
 ## Test Map (security hardening)
 

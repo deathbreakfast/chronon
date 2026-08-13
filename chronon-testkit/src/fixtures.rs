@@ -23,6 +23,9 @@ pub const COUNTING_SCRIPT: &str = "testkit-counting";
 /// Canonical failing probe script name.
 pub const FAIL_SCRIPT: &str = "testkit-fail";
 
+/// Canonical panic probe script name (handler panics).
+pub const PANIC_SCRIPT: &str = "testkit-panic";
+
 static COUNTING_RUNS: AtomicUsize = AtomicUsize::new(0);
 
 /// Minimal actor JSON for [`chronon_core::JsonScriptContextFactory`].
@@ -35,6 +38,7 @@ pub fn register_builtin_probes(registry: &mut ScriptRegistry) {
     registry.register(&ScriptDescriptor::new(NOOP_SCRIPT, noop_probe));
     registry.register(&ScriptDescriptor::new(COUNTING_SCRIPT, counting_probe));
     registry.register(&ScriptDescriptor::new(FAIL_SCRIPT, fail_probe));
+    registry.register(&ScriptDescriptor::new(PANIC_SCRIPT, panic_probe));
 }
 
 /// Reset the counting probe global (call at scenario start when needed).
@@ -69,6 +73,15 @@ fn fail_probe(
     _params: Value,
 ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
     Box::pin(async { Err(chronon_core::ChrononError::Internal("probe failure".into())) })
+}
+
+fn panic_probe(
+    _ctx: Box<dyn ScriptContext>,
+    _params: Value,
+) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    Box::pin(async {
+        panic!("testkit panic probe");
+    })
 }
 
 /// Seed `count` due cron jobs with unique names (BM-CH1 / BM-CHL* workloads).

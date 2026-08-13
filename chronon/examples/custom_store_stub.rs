@@ -134,6 +134,10 @@ impl SchedulerStore for AuditingSchedulerStore {
             .await
     }
 
+    async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>> {
+        self.inner.reclaim_expired_run_leases(now).await
+    }
+
     async fn append_revision(&self, revision: &JobRevision) -> Result<()> {
         self.inner.append_revision(revision).await
     }

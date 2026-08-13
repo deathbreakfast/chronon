@@ -170,6 +170,13 @@ pub trait SchedulerStore: Send + Sync {
         lease_ttl_secs: i64,
     ) -> Result<bool>;
 
+    /// Reset `claimed` / `running` runs whose `claim_lease_until` is at or before `now` to
+    /// [`RunStatus::Queued`](crate::models::RunStatus::Queued).
+    ///
+    /// Clears `claimed_by`, `claim_lease_until`, and `started_at`. Returns the reclaimed
+    /// `run_id` values so hybrid backends can re-enqueue claim queues.
+    async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>>;
+
     // --- Revisions ---
 
     /// Append an immutable job revision snapshot (audit / rollback).

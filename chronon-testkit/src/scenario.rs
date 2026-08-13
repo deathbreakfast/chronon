@@ -13,6 +13,8 @@ pub enum ScriptProbeKind {
     Counting,
     /// Probe that always returns an internal error.
     Fail,
+    /// Probe that panics (worker must map to Failed, not stuck Running).
+    Panic,
 }
 
 impl ScriptProbeKind {
@@ -22,6 +24,7 @@ impl ScriptProbeKind {
             Self::Noop => crate::fixtures::NOOP_SCRIPT,
             Self::Counting => crate::fixtures::COUNTING_SCRIPT,
             Self::Fail => crate::fixtures::FAIL_SCRIPT,
+            Self::Panic => crate::fixtures::PANIC_SCRIPT,
         }
     }
 }
@@ -372,6 +375,30 @@ impl ScenarioSpec {
                 ScenarioStep::SpawnEmbedded,
                 ScenarioStep::WaitRunTerminal {
                     job_name: "fail-job".into(),
+                    status: RunStatus::Failed,
+                    timeout_ms: 5_000,
+                },
+                ScenarioStep::ShutdownEmbedded,
+            ],
+        }
+    }
+
+    /// Panic script probe produces a terminal failed run (not stuck Running).
+    pub fn script_run_panic_failed() -> Self {
+        Self {
+            id: "script-run-panic-failed".into(),
+            steps: vec![
+                ScenarioStep::RegisterScript {
+                    probe: ScriptProbeKind::Panic,
+                },
+                ScenarioStep::UpsertDueCronJob {
+                    job_name: "panic-job".into(),
+                    script_name: crate::fixtures::PANIC_SCRIPT.into(),
+                    cron: "0 * * * * *".into(),
+                },
+                ScenarioStep::SpawnEmbedded,
+                ScenarioStep::WaitRunTerminal {
+                    job_name: "panic-job".into(),
                     status: RunStatus::Failed,
                     timeout_ms: 5_000,
                 },
