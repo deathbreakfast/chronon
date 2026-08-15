@@ -8,11 +8,11 @@
 //! - [`MatrixSpec`] — matrix dimensions (`ci_mem_embedded`, etc.)
 //! - [`BootstrapSession`] — install store (mem, sqlite, postgres, postgres-redis) and spawn runtimes
 //! - [`ScenarioSpec`] / [`ScenarioRunner`] — declarative steps shared by e2e and bench
-//! - [`seed_due_cron_jobs`], [`NOOP_SCRIPT`], [`COUNTING_SCRIPT`] — seed jobs and probe scripts
+//! - [`seed_due_cron_jobs`], [`NOOP_SCRIPT`], [`COUNTING_SCRIPT`], [`SLEEP_SCRIPT`] — seed jobs and probe scripts
 //!
 //! PR CI runs **mem + sqlite** matrix rows; postgres and postgres-redis run on tag CI
 //! ([`ci.yml`](../.github/workflows/ci.yml) `e2e-durable` job). Built-in probe scripts
-//! ([`NOOP_SCRIPT`], [`COUNTING_SCRIPT`]) register on every Chronon build. Partition count
+//! ([`NOOP_SCRIPT`], [`COUNTING_SCRIPT`], [`SLEEP_SCRIPT`]) register on every Chronon build. Partition count
 //! is fixed to four via `CHRONON_NUM_PARTITIONS` during bootstrap.
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -42,9 +42,10 @@ pub use distributed::{
     postgres_redis_hybrid_claim_roundtrip_smoke,
 };
 pub use fixtures::{
-    counting_probe_total, reset_counting_probe, seed_due_cron_jobs, smoke_actor_json,
-    upsert_future_cron_job, upsert_immediate_cron_job, upsert_immediate_run_once_job,
-    upsert_manual_job, wait_for_run_terminal, COUNTING_SCRIPT, FAIL_SCRIPT, NOOP_SCRIPT,
+    counting_probe_total, parse_sleep_ms, reset_counting_probe, seed_due_cron_jobs,
+    smoke_actor_json, upsert_future_cron_job, upsert_immediate_cron_job,
+    upsert_immediate_run_once_job, upsert_manual_job, wait_for_run_terminal, COUNTING_SCRIPT,
+    FAIL_SCRIPT, MAX_SLEEP_MS, NOOP_SCRIPT, SLEEP_SCRIPT,
 };
 pub use matrix::{DeploymentKind, MatrixSpec, StorageAdapter, TelemetryAdapter, Topology};
 pub use runner::{ScenarioResult, ScenarioRunner};

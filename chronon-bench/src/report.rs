@@ -107,6 +107,33 @@ pub struct BenchReport {
     /// Effective drain window after warmup trim.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effective_drain_secs: Option<f64>,
+    /// Wall time to upsert the burst + recurring cohort (milliseconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub burst_enqueue_ms: Option<f64>,
+    /// Scheduled-for to started-at latency for burst runs (milliseconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_to_start_ms: Option<MetricStats>,
+    /// Scheduled-for to finished-at latency for burst runs (milliseconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_to_terminal_ms: Option<MetricStats>,
+    /// Wall time from enqueue-complete to last expected burst Success.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub burst_drain_elapsed_secs: Option<f64>,
+    /// Successful burst runs divided by burst drain elapsed seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub burst_completed_runs_per_sec: Option<f64>,
+    /// Recurring-run start lateness versus `scheduled_for` (milliseconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recurring_lateness_ms: Option<MetricStats>,
+    /// Runs that must reach Success for a passing burst report.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_runs: Option<u64>,
+    /// Runs that reached Success.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub successful_runs: Option<u64>,
+    /// Five-minute cohort jobs missing the second fire.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missed_recurring_runs: Option<u64>,
     /// Sweep knob values for this run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sweep_dimensions: Option<SweepDimensions>,
@@ -171,6 +198,15 @@ impl BenchReport {
             prefill_elapsed_secs: None,
             drain_elapsed_secs: None,
             effective_drain_secs: None,
+            burst_enqueue_ms: None,
+            scheduled_to_start_ms: None,
+            scheduled_to_terminal_ms: None,
+            burst_drain_elapsed_secs: None,
+            burst_completed_runs_per_sec: None,
+            recurring_lateness_ms: None,
+            expected_runs: None,
+            successful_runs: None,
+            missed_recurring_runs: None,
             sweep_dimensions: None,
             verdict: None,
             error_rate: None,
@@ -194,5 +230,37 @@ impl BenchReport {
     /// Filename for a matrix batch run.
     pub fn report_filename(experiment: &str, matrix_slug: &str, hardware: &str) -> String {
         format!("{experiment}-{matrix_slug}-{hardware}.json")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BenchReport;
+    use chronon_testkit::MatrixSpec;
+
+    #[test]
+    fn old_json_without_burst_fields_still_deserializes() {
+        let json = r#"{
+            "experiment": "bm-ch5",
+            "matrix_slug": "mem-embedded-off-isolated-lab",
+            "hardware": "local",
+            "storage": "mem",
+            "deployment": "embedded",
+            "telemetry": "off",
+            "topology": "isolated-lab",
+            "status": "ok",
+            "recorded_at": "2026-01-01T00:00:00Z"
+        }"#;
+        let report: BenchReport = serde_json::from_str(json).unwrap();
+        assert_eq!(report.experiment, "bm-ch5");
+        assert!(report.burst_completed_runs_per_sec.is_none());
+        assert!(report.expected_runs.is_none());
+    }
+
+    #[test]
+    fn base_leaves_burst_fields_unset() {
+        let report = BenchReport::base("bm-ch-embed-burst", &MatrixSpec::default());
+        assert!(report.burst_enqueue_ms.is_none());
+        assert_eq!(report.status, "ok");
     }
 }

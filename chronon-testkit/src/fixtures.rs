@@ -26,6 +26,33 @@ pub const FAIL_SCRIPT: &str = "testkit-fail";
 /// Canonical panic probe script name (handler panics).
 pub const PANIC_SCRIPT: &str = "testkit-panic";
 
+/// Bounded sleep probe for burst-capacity benches (`params.sleep_ms`).
+///
+/// Accepts only a non-negative integer `sleep_ms` at or below [`MAX_SLEEP_MS`].
+/// Malformed, negative, or over-limit values return [`chronon_core::ChrononError::ParamError`]
+/// without sleeping.
+///
+/// ```no_run
+/// # async fn demo(store: &dyn chronon_core::store::SchedulerStore) -> chronon_core::Result<()> {
+/// use chronon_testkit::{upsert_immediate_cron_job, SLEEP_SCRIPT};
+///
+/// let mut job = upsert_immediate_cron_job(
+///     store,
+///     "midnight-0001",
+///     SLEEP_SCRIPT,
+///     "0 0 * * * *",
+/// )
+/// .await?;
+/// job.params_json = serde_json::json!({ "sleep_ms": 250 });
+/// store.upsert_job(&job).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub const SLEEP_SCRIPT: &str = "testkit-sleep";
+
+/// Upper bound for [`SLEEP_SCRIPT`] `sleep_ms` (milliseconds).
+pub const MAX_SLEEP_MS: u64 = 5_000;
+
 static COUNTING_RUNS: AtomicUsize = AtomicUsize::new(0);
 
 /// Minimal actor JSON for [`chronon_core::JsonScriptContextFactory`].
@@ -39,6 +66,7 @@ pub fn register_builtin_probes(registry: &mut ScriptRegistry) {
     registry.register(&ScriptDescriptor::new(COUNTING_SCRIPT, counting_probe));
     registry.register(&ScriptDescriptor::new(FAIL_SCRIPT, fail_probe));
     registry.register(&ScriptDescriptor::new(PANIC_SCRIPT, panic_probe));
+    registry.register(&ScriptDescriptor::new(SLEEP_SCRIPT, sleep_probe));
 }
 
 /// Reset the counting probe global (call at scenario start when needed).
@@ -81,6 +109,62 @@ fn panic_probe(
 ) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
     Box::pin(async {
         panic!("testkit panic probe");
+    })
+}
+
+/// Parse and bound `sleep_ms` from script params.
+///
+/// # Errors
+///
+/// Returns [`chronon_core::ChrononError::ParamError`] when `sleep_ms` is missing, not an
+/// integer, negative, or greater than [`MAX_SLEEP_MS`].
+pub fn parse_sleep_ms(params: &Value) -> Result<u64> {
+    let Some(raw) = params.get("sleep_ms") else {
+        return Err(chronon_core::ChrononError::ParamError(
+            "sleep_ms is required".into(),
+        ));
+    };
+    let ms = match raw {
+        Value::Number(n) => {
+            if let Some(u) = n.as_u64() {
+                u
+            } else if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    return Err(chronon_core::ChrononError::ParamError(
+                        "sleep_ms must be non-negative".into(),
+                    ));
+                }
+                i as u64
+            } else {
+                return Err(chronon_core::ChrononError::ParamError(
+                    "sleep_ms must be an integer".into(),
+                ));
+            }
+        }
+        _ => {
+            return Err(chronon_core::ChrononError::ParamError(
+                "sleep_ms must be an integer".into(),
+            ));
+        }
+    };
+    if ms > MAX_SLEEP_MS {
+        return Err(chronon_core::ChrononError::ParamError(format!(
+            "sleep_ms {ms} exceeds max {MAX_SLEEP_MS}"
+        )));
+    }
+    Ok(ms)
+}
+
+fn sleep_probe(
+    _ctx: Box<dyn ScriptContext>,
+    params: Value,
+) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+    Box::pin(async move {
+        let ms = parse_sleep_ms(&params)?;
+        if ms > 0 {
+            sleep(TokioDuration::from_millis(ms)).await;
+        }
+        Ok(())
     })
 }
 
@@ -203,4 +287,63 @@ pub async fn count_runs_for_job(
     };
     let runs = store.list_runs_for_job(&job.job_id, 100).await?;
     Ok(runs.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chronon_core::{ChrononError, ContextFactory, NoOpContextFactory};
+    use serde_json::json;
+
+    fn ctx() -> Box<dyn ScriptContext> {
+        NoOpContextFactory.build(&json!({})).unwrap()
+    }
+
+    #[tokio::test]
+    async fn sleep_probe_honors_sleep_ms() {
+        let start = tokio::time::Instant::now();
+        sleep_probe(ctx(), json!({ "sleep_ms": 50 })).await.unwrap();
+        assert!(start.elapsed() >= TokioDuration::from_millis(40));
+    }
+
+    #[tokio::test]
+    async fn sleep_probe_rejects_missing_sleep_ms() {
+        let err = sleep_probe(ctx(), json!({})).await.unwrap_err();
+        assert!(matches!(err, ChrononError::ParamError(_)));
+    }
+
+    #[tokio::test]
+    async fn sleep_probe_rejects_negative() {
+        let err = sleep_probe(ctx(), json!({ "sleep_ms": -1 }))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChrononError::ParamError(_)));
+    }
+
+    #[tokio::test]
+    async fn sleep_probe_rejects_non_integer() {
+        let err = sleep_probe(ctx(), json!({ "sleep_ms": 1.5 }))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChrononError::ParamError(_)));
+        let err = sleep_probe(ctx(), json!({ "sleep_ms": "100" }))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChrononError::ParamError(_)));
+    }
+
+    #[tokio::test]
+    async fn sleep_probe_rejects_over_limit_without_sleeping() {
+        let start = tokio::time::Instant::now();
+        let err = sleep_probe(ctx(), json!({ "sleep_ms": MAX_SLEEP_MS + 1 }))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChrononError::ParamError(_)));
+        assert!(start.elapsed() < TokioDuration::from_millis(200));
+    }
+
+    #[test]
+    fn parse_sleep_ms_accepts_zero() {
+        assert_eq!(parse_sleep_ms(&json!({ "sleep_ms": 0 })).unwrap(), 0);
+    }
 }

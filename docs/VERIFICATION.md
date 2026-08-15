@@ -64,6 +64,9 @@ cargo build -p uf-chronon --example worker_daemon --features postgres,redis
 cargo run -p chronon-bench -- run \
   --experiment bm-ch0 --storage mem --deployment embedded \
   --telemetry off --ops 50 --warmup 5
+CHRONON_WORKER_CONCURRENCY=4 cargo run -p chronon-bench -- run \
+  --experiment bm-ch-embed-burst --storage mem --deployment embedded \
+  --telemetry off --jobs 8
 ```
 
 ## Public crate examples

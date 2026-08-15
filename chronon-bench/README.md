@@ -1,8 +1,8 @@
 # chronon-bench
 
-Performance CLI and experiment registry for BM-CH* (scheduler layer) and BM-CH7-D hyperscale campaigns — run benchmark sweeps, matrix slices, scaling curves, and fleet aggregation.
+Performance CLI and experiment registry for BM-CH* (scheduler layer) and BM-CH7-D hyperscale campaigns. Run benchmark sweeps, matrix slices, scaling curves, and fleet aggregation.
 
-**Docs:** [`PERFORMANCE.md`](PERFORMANCE.md) · [`PERFORMANCE.md`](PERFORMANCE.md)
+**Docs:** [`PERFORMANCE.md`](PERFORMANCE.md). AWS campaign rows live in the cloud-lab Chronon study (`uf-live-cloud-lab/chronon/docs/PERFORMANCE_STUDY.md`).
 
 ## Subcommands
 
@@ -16,12 +16,28 @@ Performance CLI and experiment registry for BM-CH* (scheduler layer) and BM-CH7-
 
 **Curve kinds:** `ch7-worker-curve`, `ch7-pool-curve`, `ch7-data-curve`, `ch7-multibench-curve`, `ch7d-fleet-curve`, `ch1-job-curve`, `chl-sustain-curve`
 
+## Embedded burst (bm-ch-embed-burst)
+
+Measures completed runs after a midnight-shaped due-job wave on the embedded scheduler: tick, claim, and worker execution together. BM-CH5 remains the sequential lifecycle-overhead experiment (one job at a time). Store claim rates stay on BM-CH7.
+
+```bash
+CHRONON_BENCH_HARDWARE=aws-t3-medium \
+CHRONON_WORKER_CONCURRENCY=4 \
+cargo run -p chronon-bench -- run \
+  --experiment bm-ch-embed-burst \
+  --storage sqlite --deployment embedded \
+  --telemetry off --jobs 500
+```
+
+Worker sweep (4/8/16/32) and sqlite campaign: [`scripts/run-embed-burst.sh`](scripts/run-embed-burst.sh).
+
 ## Verify
 
 ```bash
 export CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR=../../target-chronon-bench
 cargo run -p chronon-bench -- experiments
 cargo run -p chronon-bench -- run --experiment bm-ch0 --storage mem --ops 1000 --warmup 5
+cargo run -p chronon-bench -- run --experiment bm-ch-embed-burst --storage mem --jobs 8
 cargo run -p chronon-bench -- matrix --slice adapter-floor --storage mem
 cargo run -p chronon-bench -- scaling-curve ch7-worker-curve --storage mem --reports-dir profiling/chronon-bench/reports
 cargo test -p chronon-bench --all-targets
@@ -29,8 +45,8 @@ cargo test -p chronon-bench --all-targets
 
 ## Campaign scripts
 
-Local sweeps: [`scripts/`](scripts/) — `run-ch7-d0-worker-sweep.sh`, `run-ch7-pool-sweep.sh`, `run-ch7-multibench-sweep.sh`, `run-ch7d-fleet-sweep.sh`, `run-ch7-multibench-smoke.sh`.
+Local sweeps: [`scripts/`](scripts/) — `run-embed-burst.sh`, `run-ch7-d0-worker-sweep.sh`, `run-ch7-pool-sweep.sh`, `run-ch7-multibench-sweep.sh`, `run-ch7d-fleet-sweep.sh`, `run-ch7-multibench-smoke.sh`.
 
 AWS hyperscale (CH7-D0–D4): provision, deploy, full campaign, and fetch reports on AWS EC2 (operator campaign).
 
-**Reports:** `profiling/chronon-bench/reports/` — baseline 85 JSON on `aws-t3.medium`; CH7-D curves on `aws-c6i-large` label.
+**Reports:** `profiling/chronon-bench/reports/` — baseline JSON on `aws-t3.medium`; CH7-D curves on `aws-c6i-large` label.

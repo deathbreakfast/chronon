@@ -135,6 +135,11 @@ impl BenchRunConfig {
                 cfg.prefill_count = 100_000;
                 cfg.worker_host_count = 1;
             }
+            "bm-ch-embed-burst" => {
+                cfg.worker_count = 4;
+                cfg.job_count = 500;
+                cfg.tick_batch_limit = 500;
+            }
             "bm-chl0" => {
                 cfg.job_count = 10;
             }
@@ -197,5 +202,13 @@ mod tests {
     fn chl_tiers_match_job_count() {
         assert_eq!(BenchRunConfig::for_experiment("bm-chl2").job_count, 1000);
         assert_eq!(BenchRunConfig::for_experiment("bm-chl3").job_count, 10_000);
+    }
+
+    #[test]
+    fn embed_burst_defaults_workers_and_jobs() {
+        let cfg = BenchRunConfig::for_experiment("bm-ch-embed-burst");
+        assert_eq!(cfg.worker_count, 4);
+        assert_eq!(cfg.job_count, 500);
+        assert_eq!(cfg.tick_batch_limit, 500);
     }
 }
