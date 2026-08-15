@@ -31,6 +31,18 @@ cargo run -p chronon-bench -- run \
 
 Worker sweep (4/8/16/32) and sqlite campaign: [`scripts/run-embed-burst.sh`](scripts/run-embed-burst.sh).
 
+## Fleet burst (bm-ch-fleet-burst)
+
+Same 500 due jobs plus colliding recurring cohort, run on coordinator-worker processes against a shared store. The scale axis is `--worker-hosts` (1/2/4), not in-process worker concurrency. Quote a public number only from a postgres-redis AWS report with `status=ok`.
+
+```bash
+CHRONON_BENCH_HARDWARE=aws-c6i-large \
+cargo run -p chronon-bench -- run \
+  --experiment bm-ch-fleet-burst \
+  --storage postgres-redis --deployment coordinator-worker \
+  --topology split-chronon-server --jobs 500 --worker-hosts 1
+```
+
 ## Verify
 
 ```bash

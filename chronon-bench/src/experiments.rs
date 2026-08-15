@@ -9,6 +9,7 @@ pub const MATRIX_SLICES: &[&str] = &[
     "claim-capacity",
     "scheduler-sustain",
     "execution-path",
+    "fleet-burst",
     "resilience",
     "telemetry-tax",
     "cost-tier",
@@ -27,6 +28,7 @@ pub const ALL_EXPERIMENT_IDS: &[&str] = &[
     "bm-ch7d",
     "bm-ch-retry",
     "bm-ch-embed-burst",
+    "bm-ch-fleet-burst",
     "bm-chl0",
     "bm-chl1",
     "bm-chl2",
@@ -95,7 +97,7 @@ pub fn resolve_experiment(
             default_ops: ops.unwrap_or(32),
             default_jobs: Some(jobs.unwrap_or(100_000)),
         },
-        "bm-ch-embed-burst" => ExperimentPlan {
+        "bm-ch-embed-burst" | "bm-ch-fleet-burst" => ExperimentPlan {
             id: id.into(),
             default_ops: ops.unwrap_or(500),
             default_jobs: Some(jobs.unwrap_or(500)),
@@ -136,6 +138,7 @@ pub fn subset_experiments(slice: &str) -> Result<Vec<&'static str>> {
         "claim-capacity" => vec!["bm-ch7", "bm-ch7d"],
         "scheduler-sustain" => vec!["bm-chl0", "bm-chl1", "bm-chl2", "bm-chl3"],
         "execution-path" => vec!["bm-ch5", "bm-ch6", "bm-ch-retry", "bm-ch-embed-burst"],
+        "fleet-burst" => vec!["bm-ch-fleet-burst"],
         "resilience" => vec!["bm-ch3", "bm-ch4"],
         "telemetry-tax" => vec!["bm-ch0"],
         "cost-tier" => vec!["bm-chl1"],
@@ -164,5 +167,11 @@ mod tests {
         let ids = subset_experiments("execution-path").unwrap();
         assert!(ids.contains(&"bm-ch-embed-burst"));
         assert!(ids.contains(&"bm-ch5"));
+    }
+
+    #[test]
+    fn fleet_burst_slice_is_fleet_id() {
+        let ids = subset_experiments("fleet-burst").unwrap();
+        assert_eq!(ids, vec!["bm-ch-fleet-burst"]);
     }
 }

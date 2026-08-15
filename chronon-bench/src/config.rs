@@ -140,6 +140,12 @@ impl BenchRunConfig {
                 cfg.job_count = 500;
                 cfg.tick_batch_limit = 500;
             }
+            "bm-ch-fleet-burst" => {
+                cfg.worker_count = 4;
+                cfg.job_count = 500;
+                cfg.tick_batch_limit = 500;
+                cfg.worker_host_count = 1;
+            }
             "bm-chl0" => {
                 cfg.job_count = 10;
             }
@@ -209,6 +215,15 @@ mod tests {
         let cfg = BenchRunConfig::for_experiment("bm-ch-embed-burst");
         assert_eq!(cfg.worker_count, 4);
         assert_eq!(cfg.job_count, 500);
+        assert_eq!(cfg.tick_batch_limit, 500);
+    }
+
+    #[test]
+    fn fleet_burst_defaults_host_axis() {
+        let cfg = BenchRunConfig::for_experiment("bm-ch-fleet-burst");
+        assert_eq!(cfg.worker_count, 4);
+        assert_eq!(cfg.job_count, 500);
+        assert_eq!(cfg.worker_host_count, 1);
         assert_eq!(cfg.tick_batch_limit, 500);
     }
 }

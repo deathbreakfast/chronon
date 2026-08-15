@@ -11,7 +11,8 @@ use chrono::{DateTime, Utc};
 use chronon_core::models::{Run, RunStatus};
 use chronon_core::store::SchedulerStore;
 use chronon_testkit::{
-    smoke_actor_json, upsert_immediate_cron_job, BootstrapSession, FAIL_SCRIPT, SLEEP_SCRIPT,
+    smoke_actor_json, upsert_immediate_cron_job, BootstrapSession, DeploymentKind, FAIL_SCRIPT,
+    SLEEP_SCRIPT,
 };
 use serde_json::json;
 
@@ -153,6 +154,20 @@ impl SeededNames {
 
 /// BM-CH-embed-burst runner.
 pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
+    run_layout(ctx, BurstLayout::Embedded).await
+}
+
+/// Same midnight burst on coordinator-worker hosts (`bm-ch-fleet-burst`).
+pub async fn run_fleet(ctx: &RunContext) -> Result<BenchReport> {
+    run_layout(ctx, BurstLayout::Fleet).await
+}
+
+enum BurstLayout {
+    Embedded,
+    Fleet,
+}
+
+async fn run_layout(ctx: &RunContext, layout: BurstLayout) -> Result<BenchReport> {
     let mut workload = BurstWorkload::from_bench(&ctx.bench)?;
     if std::env::var("CHRONON_BENCH_BURST_FAIL_PROBE")
         .ok()
@@ -161,15 +176,30 @@ pub async fn run(ctx: &RunContext) -> Result<BenchReport> {
         workload.script_name = FAIL_SCRIPT;
         workload.background_jobs = 0;
     }
-    run_with_workload(ctx, workload).await
+    run_with_workload(ctx, workload, layout).await
 }
 
-async fn run_with_workload(ctx: &RunContext, workload: BurstWorkload) -> Result<BenchReport> {
+async fn run_with_workload(
+    ctx: &RunContext,
+    workload: BurstWorkload,
+    layout: BurstLayout,
+) -> Result<BenchReport> {
     let _env = ConcurrencyGuard::apply(ctx.bench.worker_count, ctx.bench.tick_batch_limit);
 
-    let mut session = BootstrapSession::new(ctx.matrix.clone());
+    let mut matrix = ctx.matrix.clone();
+    if matches!(layout, BurstLayout::Fleet) {
+        matrix.deployment = DeploymentKind::CoordinatorWorker;
+    }
+    let mut session = BootstrapSession::new(matrix);
     session.install().await?;
-    session.spawn_embedded().await?;
+    match layout {
+        BurstLayout::Embedded => session.spawn_embedded().await?,
+        BurstLayout::Fleet => {
+            session
+                .spawn_coordinator_worker_n(ctx.bench.worker_host_count.max(1))
+                .await?;
+        }
+    }
     let store = session.store_dyn()?;
 
     let enqueue_started = Instant::now();
@@ -613,10 +643,27 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn mem_embedded_burst_reaches_expected_success() {
+    static BURST_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_burst_tests() -> std::sync::MutexGuard<'static, ()> {
+        BURST_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime")
+            .block_on(fut)
+    }
+
+    #[test]
+    fn mem_embedded_burst_reaches_expected_success() {
+        let _guard = lock_burst_tests();
         let ctx = mem_ctx(8);
-        let report = run(&ctx).await.unwrap();
+        let report = block_on(run(&ctx)).unwrap();
         assert_eq!(report.status, "ok", "{:?}", report.error);
         assert!(
             report.successful_runs.unwrap_or(0) >= report.expected_runs.unwrap_or(u64::MAX),
@@ -631,23 +678,52 @@ mod tests {
         assert!(report.burst_enqueue_ms.unwrap() >= 0.0);
     }
 
-    #[tokio::test]
-    async fn failing_probe_marks_report_failed() {
-        std::env::set_var("CHRONON_BENCH_BURST_FAIL_PROBE", "1");
+    #[test]
+    fn mem_fleet_burst_reaches_expected_success() {
+        let _guard = lock_burst_tests();
+        let plan = resolve_experiment("bm-ch-fleet-burst", None, Some(8)).unwrap();
+        let mut bench = BenchRunConfig::for_experiment("bm-ch-fleet-burst");
+        bench.job_count = 8;
+        bench.worker_count = 2;
+        bench.worker_host_count = 2;
+        let ctx = RunContext {
+            matrix: MatrixSpec::ci_mem_coordinator_worker(),
+            plan,
+            warmup: 0,
+            bench,
+        };
+        let report = block_on(run_fleet(&ctx)).unwrap();
+        assert_eq!(report.status, "ok", "{:?}", report.error);
+        assert!(
+            report.successful_runs.unwrap_or(0) >= report.expected_runs.unwrap_or(u64::MAX),
+            "successful {:?} expected {:?}",
+            report.successful_runs,
+            report.expected_runs
+        );
+        assert_eq!(report.missed_recurring_runs, Some(0));
+        assert!(report.burst_completed_runs_per_sec.unwrap_or(0.0) > 0.0);
+    }
+
+    #[test]
+    fn failing_probe_marks_report_failed() {
+        let _guard = lock_burst_tests();
         let ctx = mem_ctx(4);
-        let report = run(&ctx).await.unwrap();
-        std::env::remove_var("CHRONON_BENCH_BURST_FAIL_PROBE");
+        let mut workload = BurstWorkload::from_bench(&ctx.bench).unwrap();
+        workload.script_name = FAIL_SCRIPT;
+        workload.background_jobs = 0;
+        let report = block_on(run_with_workload(&ctx, workload, BurstLayout::Embedded)).unwrap();
         assert_eq!(report.status, "fail");
         assert!(report.error.is_some());
     }
 
-    #[tokio::test]
-    async fn drain_timeout_fails_closed() {
+    #[test]
+    fn drain_timeout_fails_closed() {
+        let _guard = lock_burst_tests();
         let ctx = mem_ctx(8);
         let mut workload = BurstWorkload::from_bench(&ctx.bench).unwrap();
         workload.drain_timeout = Duration::from_millis(1);
         workload.recurring_wait = Duration::from_millis(1);
-        let report = run_with_workload(&ctx, workload).await.unwrap();
+        let report = block_on(run_with_workload(&ctx, workload, BurstLayout::Embedded)).unwrap();
         assert_eq!(report.status, "fail");
         assert!(report
             .error

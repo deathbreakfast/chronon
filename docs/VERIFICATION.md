@@ -67,6 +67,9 @@ cargo run -p chronon-bench -- run \
 CHRONON_WORKER_CONCURRENCY=4 cargo run -p chronon-bench -- run \
   --experiment bm-ch-embed-burst --storage mem --deployment embedded \
   --telemetry off --jobs 8
+CHRONON_WORKER_CONCURRENCY=4 cargo run -p chronon-bench -- run \
+  --experiment bm-ch-fleet-burst --storage mem --deployment coordinator-worker \
+  --telemetry off --jobs 8 --worker-hosts 1
 ```
 
 ## Public crate examples

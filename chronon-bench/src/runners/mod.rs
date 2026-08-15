@@ -55,6 +55,7 @@ pub async fn run_experiment(ctx: &RunContext) -> Result<BenchReport> {
         "bm-ch7d" => ch7_daemon::run(ctx).await?,
         "bm-ch-retry" => ch_retry::run(ctx).await?,
         "bm-ch-embed-burst" => ch_embed_burst::run(ctx).await?,
+        "bm-ch-fleet-burst" => ch_embed_burst::run_fleet(ctx).await?,
         id if id.starts_with("bm-chl") => chl_load::run(ctx).await?,
         other => anyhow::bail!("no runner for {other}"),
     };
