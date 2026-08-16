@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
-use chronon_core::models::{Run, RunStatus};
+use chronon_core::models::{Job, Run, RunStatus, ScheduleKind};
 use chronon_core::store::SchedulerStore;
 use chronon_testkit::{
     smoke_actor_json, upsert_immediate_cron_job, BootstrapSession, DeploymentKind, FAIL_SCRIPT,
@@ -78,8 +78,8 @@ impl BurstWorkload {
         {
             (
                 "*/2 * * * * *".to_string(),
-                "*/4 * * * * *".to_string(),
-                "*/8 * * * * *".to_string(),
+                "0 0 1 1 * *".to_string(),
+                "0 0 1 1 * *".to_string(),
                 Duration::from_secs(5),
                 Duration::from_secs(20),
             )
@@ -162,6 +162,7 @@ pub async fn run_fleet(ctx: &RunContext) -> Result<BenchReport> {
     run_layout(ctx, BurstLayout::Fleet).await
 }
 
+#[derive(Clone, Copy)]
 enum BurstLayout {
     Embedded,
     Fleet,
@@ -191,9 +192,23 @@ async fn run_with_workload(
         matrix.deployment = DeploymentKind::CoordinatorWorker;
     }
     let mut session = BootstrapSession::new(matrix);
-    session.install().await?;
+    let worker_role = fleet_worker_role();
+    let coordinator_role = fleet_coordinator_role();
+    if matches!(layout, BurstLayout::Fleet) {
+        if let Some(cell) = burst_cell_id() {
+            session
+                .install_multibench_cell(&cell, coordinator_role)
+                .await?;
+        } else {
+            session.install().await?;
+        }
+    } else {
+        session.install().await?;
+    }
     match layout {
         BurstLayout::Embedded => session.spawn_embedded().await?,
+        BurstLayout::Fleet if worker_role => session.spawn_workers_n(1).await?,
+        BurstLayout::Fleet if coordinator_role => session.spawn_coordinator_only().await?,
         BurstLayout::Fleet => {
             session
                 .spawn_coordinator_worker_n(ctx.bench.worker_host_count.max(1))
@@ -203,39 +218,49 @@ async fn run_with_workload(
     let store = session.store_dyn()?;
 
     let enqueue_started = Instant::now();
-    let seeded = match seed_workload(store.as_ref(), &workload).await {
-        Ok(names) => names,
-        Err(err) => {
-            let _ = session.shutdown_embedded().await;
-            return fail_report(ctx, &workload, format!("seed failed: {err}"));
+    let seeded = if worker_role {
+        SeededNames::default()
+    } else {
+        match seed_workload(store.as_ref(), &workload).await {
+            Ok(names) => names,
+            Err(err) => {
+                let _ = session.shutdown_embedded().await;
+                return fail_report(ctx, &workload, format!("seed failed: {err}"));
+            }
         }
     };
     let burst_enqueue_ms = enqueue_started.elapsed().as_secs_f64() * 1000.0;
 
     let drain_started = Instant::now();
-    let wait_result = wait_for_expected(store.as_ref(), &workload, &seeded).await;
-    let burst_drain_elapsed_secs = drain_started.elapsed().as_secs_f64().max(1e-9);
-
-    let runs = match list_all_runs(store.as_ref()).await {
-        Ok(runs) => runs,
-        Err(err) => {
-            let _ = session.shutdown_embedded().await;
-            return fail_report(ctx, &workload, format!("list runs failed: {err}"));
-        }
+    let wait_result = if worker_role {
+        wait_for_success_count(store.as_ref(), &workload).await
+    } else {
+        wait_for_expected(store.as_ref(), &workload, &seeded).await
     };
+    let burst_drain_elapsed_secs = drain_started.elapsed().as_secs_f64().max(1e-9);
 
     if let Err(err) = session.shutdown_embedded().await {
         return fail_report(ctx, &workload, format!("shutdown failed: {err}"));
     }
+
+    let runs = match list_all_runs(store.as_ref()).await {
+        Ok(runs) => runs,
+        Err(err) => {
+            return fail_report(ctx, &workload, format!("list runs failed: {err}"));
+        }
+    };
 
     Ok(build_report(
         ctx,
         &workload,
         &seeded,
         &runs,
-        burst_enqueue_ms,
-        burst_drain_elapsed_secs,
-        wait_result.err().map(|e| e.to_string()),
+        BurstTiming {
+            enqueue_ms: burst_enqueue_ms,
+            drain_elapsed_secs: burst_drain_elapsed_secs,
+            wait_error: wait_result.err().map(|e| e.to_string()),
+        },
+        report_node_count(ctx, layout),
     ))
 }
 
@@ -256,8 +281,7 @@ async fn seed_workload(
         if !names.insert(name.clone()) {
             bail!("duplicate burst job name {name}");
         }
-        let job_id =
-            upsert_named(store, &name, workload.script_name, "0 * * * * *", sleep_ms).await?;
+        let job_id = upsert_named_run_once(store, &name, workload.script_name, sleep_ms).await?;
         seeded.burst.push(job_id);
     }
 
@@ -308,6 +332,27 @@ async fn seed_workload(
     Ok(seeded)
 }
 
+async fn upsert_named_run_once(
+    store: &dyn SchedulerStore,
+    name: &str,
+    script: &str,
+    sleep_ms: u64,
+) -> Result<String> {
+    let due = Utc::now() - chrono::Duration::seconds(60);
+    let mut job = Job::new(name, script);
+    job.schedule_kind = ScheduleKind::RunOnce;
+    job.run_once_at = Some(due);
+    job.next_run_at = Some(due);
+    job.partition_hash = Some(chronon_scheduler::partition_hash_i64_for_job_id(
+        &job.job_id,
+    ));
+    job.actor_json = smoke_actor_json();
+    job.params_json = json!({ "sleep_ms": sleep_ms, "job_name": name });
+    job.timeout_ms = Some(10_000);
+    store.upsert_job(&job).await?;
+    Ok(job.job_id)
+}
+
 async fn upsert_named(
     store: &dyn SchedulerStore,
     name: &str,
@@ -328,13 +373,12 @@ async fn wait_for_expected(
     workload: &BurstWorkload,
     seeded: &SeededNames,
 ) -> Result<()> {
-    let deadline = Instant::now() + workload.drain_timeout;
+    let deadline = Instant::now() + workload.drain_timeout.max(workload.recurring_wait);
     let expected = if workload.script_name == FAIL_SCRIPT {
         0
     } else {
         workload.expected_runs()
     };
-    let mut saw_first_wave_at: Option<Instant> = None;
     loop {
         if Instant::now() >= deadline {
             bail!("drain timeout before expected terminal runs");
@@ -353,17 +397,9 @@ async fn wait_for_expected(
                 return Ok(());
             }
         } else {
-            let first_wave = workload.burst_jobs as u64 + workload.background_jobs as u64;
-            if success >= first_wave && saw_first_wave_at.is_none() {
-                saw_first_wave_at = Some(Instant::now());
-            }
-            if let Some(t0) = saw_first_wave_at {
-                if t0.elapsed() >= workload.recurring_wait {
-                    let missed = missed_five_min(&runs, seeded);
-                    if success >= expected && missed == 0 {
-                        return Ok(());
-                    }
-                }
+            let missed = missed_five_min(&runs, seeded);
+            if success >= expected && missed == 0 {
+                return Ok(());
             }
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -406,15 +442,96 @@ fn missed_five_min(runs: &[Run], seeded: &SeededNames) -> u64 {
     missed
 }
 
+fn burst_correctness_pass(
+    successful_runs: u64,
+    expected: u64,
+    missed: u64,
+    fail_probe: bool,
+    timed_out: bool,
+) -> bool {
+    !fail_probe && !timed_out && successful_runs == expected && missed == 0
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE"))
+}
+
+fn burst_cell_id() -> Option<String> {
+    std::env::var("CHRONON_BENCH_CELL_ID")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+fn bench_client_index() -> u32 {
+    std::env::var("CHRONON_BENCH_CLIENT_INDEX")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+}
+
+fn fleet_worker_role() -> bool {
+    env_flag("CHRONON_BENCH_DRAIN_ONLY")
+        || env_flag("CHRONON_BENCH_WORKER_ONLY")
+        || (burst_cell_id().is_some() && bench_client_index() > 0)
+}
+
+fn fleet_coordinator_role() -> bool {
+    !fleet_worker_role()
+        && (env_flag("CHRONON_BENCH_COORDINATOR_ONLY") || burst_cell_id().is_some())
+}
+
+async fn wait_for_success_count(
+    store: &dyn SchedulerStore,
+    workload: &BurstWorkload,
+) -> Result<()> {
+    let deadline = Instant::now() + workload.drain_timeout.max(workload.recurring_wait);
+    let expected = workload.expected_runs();
+    loop {
+        if Instant::now() >= deadline {
+            bail!("worker drain timeout before expected terminal runs");
+        }
+        let runs = list_all_runs(store).await?;
+        let success = runs
+            .iter()
+            .filter(|r| r.status == RunStatus::Success)
+            .count() as u64;
+        if success >= expected {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+struct BurstTiming {
+    enqueue_ms: f64,
+    drain_elapsed_secs: f64,
+    wait_error: Option<String>,
+}
+
+fn report_node_count(ctx: &RunContext, layout: BurstLayout) -> u32 {
+    if let Ok(raw) = std::env::var("CHRONON_BENCH_NODE_COUNT") {
+        if let Ok(n) = raw.parse::<u32>() {
+            return n.max(1);
+        }
+    }
+    match layout {
+        BurstLayout::Embedded => 1,
+        BurstLayout::Fleet => ctx.bench.worker_host_count.max(1),
+    }
+}
+
 fn build_report(
     ctx: &RunContext,
     workload: &BurstWorkload,
     seeded: &SeededNames,
     runs: &[Run],
-    burst_enqueue_ms: f64,
-    burst_drain_elapsed_secs: f64,
-    wait_error: Option<String>,
+    timing: BurstTiming,
+    node_count: u32,
 ) -> BenchReport {
+    let burst_enqueue_ms = timing.enqueue_ms;
+    let burst_drain_elapsed_secs = timing.drain_elapsed_secs;
+    let wait_error = timing.wait_error;
     let burst_success: Vec<&Run> = runs
         .iter()
         .filter(|r| r.status == RunStatus::Success && is_burst_run(r, seeded))
@@ -462,15 +579,16 @@ fn build_report(
     report.successful_runs = Some(successful_runs);
     report.missed_recurring_runs = Some(missed);
     report.drain_elapsed_secs = Some(burst_drain_elapsed_secs);
-    report.error_rate = Some(if expected == 0 {
+    report.node_count = Some(node_count);
+    report.error_rate = Some(if expected == 0 || successful_runs == expected {
         0.0
     } else {
-        1.0 - (successful_runs.min(expected) as f64 / expected as f64)
+        successful_runs.abs_diff(expected) as f64 / expected as f64
     });
 
     let fail_probe = workload.script_name == FAIL_SCRIPT;
     let timed_out = wait_error.is_some();
-    let pass = !fail_probe && !timed_out && successful_runs >= expected && missed == 0;
+    let pass = burst_correctness_pass(successful_runs, expected, missed, fail_probe, timed_out);
     if pass {
         report.status = "ok".into();
         report.pass_notes = Some(format!(
@@ -648,7 +766,7 @@ mod tests {
     fn lock_burst_tests() -> std::sync::MutexGuard<'static, ()> {
         BURST_TEST_LOCK
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn block_on<F: std::future::Future>(fut: F) -> F::Output {
@@ -665,12 +783,14 @@ mod tests {
         let ctx = mem_ctx(8);
         let report = block_on(run(&ctx)).unwrap();
         assert_eq!(report.status, "ok", "{:?}", report.error);
-        assert!(
-            report.successful_runs.unwrap_or(0) >= report.expected_runs.unwrap_or(u64::MAX),
+        assert_eq!(
+            report.successful_runs.unwrap_or(0),
+            report.expected_runs.unwrap_or(u64::MAX),
             "successful {:?} expected {:?}",
             report.successful_runs,
             report.expected_runs
         );
+        assert_eq!(report.node_count, Some(1));
         assert_eq!(report.missed_recurring_runs, Some(0));
         assert!(report.burst_completed_runs_per_sec.unwrap_or(0.0) > 0.0);
         assert!(report.scheduled_to_start_ms.unwrap().count > 0);
@@ -694,14 +814,24 @@ mod tests {
         };
         let report = block_on(run_fleet(&ctx)).unwrap();
         assert_eq!(report.status, "ok", "{:?}", report.error);
-        assert!(
-            report.successful_runs.unwrap_or(0) >= report.expected_runs.unwrap_or(u64::MAX),
+        assert_eq!(
+            report.successful_runs.unwrap_or(0),
+            report.expected_runs.unwrap_or(u64::MAX),
             "successful {:?} expected {:?}",
             report.successful_runs,
             report.expected_runs
         );
+        assert_eq!(report.node_count, Some(2));
         assert_eq!(report.missed_recurring_runs, Some(0));
         assert!(report.burst_completed_runs_per_sec.unwrap_or(0.0) > 0.0);
+    }
+
+    #[test]
+    fn over_count_is_not_a_pass() {
+        assert!(!burst_correctness_pass(12, 8, 0, false, false));
+        assert!(!burst_correctness_pass(7, 8, 0, false, false));
+        assert!(burst_correctness_pass(8, 8, 0, false, false));
+        assert!(!burst_correctness_pass(8, 8, 1, false, false));
     }
 
     #[test]
@@ -729,5 +859,38 @@ mod tests {
             .error
             .as_deref()
             .is_some_and(|e| e.contains("timeout") || e.contains("expected")));
+    }
+
+    #[test]
+    fn coordinator_only_without_workers_fails_expected_count() {
+        let _guard = lock_burst_tests();
+        std::env::set_var("CHRONON_BENCH_COORDINATOR_ONLY", "1");
+        let ctx = mem_ctx(8);
+        let report = block_on(run_fleet(&ctx));
+        std::env::remove_var("CHRONON_BENCH_COORDINATOR_ONLY");
+        let report = report.unwrap();
+        assert_eq!(report.status, "fail", "{:?}", report.error);
+        assert_ne!(
+            report.successful_runs.unwrap_or(0),
+            report.expected_runs.unwrap_or(u64::MAX)
+        );
+    }
+
+    #[test]
+    fn worker_only_without_seed_times_out() {
+        let _guard = lock_burst_tests();
+        std::env::set_var("CHRONON_BENCH_WORKER_ONLY", "1");
+        let ctx = mem_ctx(8);
+        let mut workload = BurstWorkload::from_bench(&ctx.bench).unwrap();
+        workload.drain_timeout = Duration::from_millis(200);
+        workload.recurring_wait = Duration::from_millis(1);
+        let report = block_on(run_with_workload(&ctx, workload, BurstLayout::Fleet));
+        std::env::remove_var("CHRONON_BENCH_WORKER_ONLY");
+        let report = report.unwrap();
+        assert_eq!(report.status, "fail", "{:?}", report.error);
+        assert!(report
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("timeout")));
     }
 }

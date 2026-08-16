@@ -202,4 +202,37 @@ mod tests {
         drop(b1);
         drop(b2);
     }
+
+    #[tokio::test]
+    async fn sqlite_wal_concurrent_upserts_do_not_busy() {
+        use std::sync::Arc;
+
+        use chronon_core::models::Job;
+        use chronon_core::store::SchedulerStore;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wal.db");
+        let url = format!("sqlite://{}?mode=rwc", path.display());
+        let store = Arc::new(SqlSchedulerStore::connect_sqlite(&url).await.unwrap());
+        let mut joins = Vec::new();
+        for task in 0..8 {
+            let store = Arc::clone(&store);
+            joins.push(tokio::spawn(async move {
+                for i in 0..40 {
+                    let job = Job::new(format!("w{task}-{i}"), "script_a");
+                    store.upsert_job(&job).await.expect("upsert");
+                }
+            }));
+        }
+        for join in joins {
+            join.await.expect("task");
+        }
+    }
+
+    #[tokio::test]
+    async fn sqlite_memory_url_still_connects() {
+        SqlSchedulerStore::connect_sqlite("sqlite://:memory:")
+            .await
+            .expect("memory sqlite");
+    }
 }

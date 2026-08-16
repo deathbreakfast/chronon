@@ -1,6 +1,9 @@
 use std::fmt;
+use std::str::FromStr;
+use std::time::Duration;
 
 use chronon_core::Result;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{Executor, Pool, Postgres, Sqlite};
 
 use crate::error_map::{map_connect_err, map_err};
@@ -14,6 +17,11 @@ pub fn postgres_max_connections() -> u32 {
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(5)
         .clamp(1, 200)
+}
+
+fn sqlite_url_is_file_backed(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    !lower.contains(":memory:") && !lower.contains("mode=memory")
 }
 
 /// `SQLite` uses `?` placeholders; `PostgreSQL` uses `$1`, `$2`, …
@@ -108,13 +116,24 @@ pub struct SqlSchedulerStore {
 impl SqlSchedulerStore {
     /// Open a `SQLite` pool, bootstrap schema, and return a store.
     ///
+    /// File-backed URLs use WAL and a 5s busy timeout so concurrent scheduler
+    /// writes wait instead of failing immediately with `SQLITE_BUSY`. In-memory
+    /// URLs keep the default journal; WAL is not valid for `:memory:`.
+    ///
     /// # Errors
     ///
     /// Returns a storage error if the pool connection or schema bootstrap fails.
     pub async fn connect_sqlite(url: &str) -> Result<Self> {
+        let mut options = SqliteConnectOptions::from_str(url)
+            .map_err(|e| map_connect_err("sqlite", url, e))?
+            .create_if_missing(true)
+            .busy_timeout(Duration::from_secs(5));
+        if sqlite_url_is_file_backed(url) {
+            options = options.journal_mode(SqliteJournalMode::Wal);
+        }
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(5)
-            .connect(url)
+            .connect_with(options)
             .await
             .map_err(|e| map_connect_err("sqlite", url, e))?;
         Self::from_sqlite_pool(pool).await
@@ -281,7 +300,7 @@ impl fmt::Debug for SqlSchedulerStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{bind_sql, validate_postgres_schema_name, SqlDialect};
+    use super::{bind_sql, sqlite_url_is_file_backed, validate_postgres_schema_name, SqlDialect};
 
     #[test]
     fn bind_sql_sqlite_passthrough() {
@@ -323,5 +342,15 @@ mod tests {
                 other => panic!("expected ParamError for {name:?}, got {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn sqlite_url_file_backed_detection() {
+        assert!(sqlite_url_is_file_backed("sqlite:///tmp/chronon.db"));
+        assert!(sqlite_url_is_file_backed("sqlite://./bench.db?mode=rwc"));
+        assert!(!sqlite_url_is_file_backed("sqlite://:memory:"));
+        assert!(!sqlite_url_is_file_backed(
+            "sqlite://file:mem?mode=memory&cache=shared"
+        ));
     }
 }

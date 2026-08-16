@@ -131,6 +131,9 @@ pub struct BenchReport {
     /// Runs that reached Success.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub successful_runs: Option<u64>,
+    /// Distinct application or worker hosts represented by this report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_count: Option<u32>,
     /// Five-minute cohort jobs missing the second fire.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missed_recurring_runs: Option<u64>,
@@ -206,6 +209,7 @@ impl BenchReport {
             recurring_lateness_ms: None,
             expected_runs: None,
             successful_runs: None,
+            node_count: None,
             missed_recurring_runs: None,
             sweep_dimensions: None,
             verdict: None,

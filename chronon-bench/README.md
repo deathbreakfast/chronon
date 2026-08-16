@@ -33,7 +33,7 @@ Worker sweep (4/8/16/32) and sqlite campaign: [`scripts/run-embed-burst.sh`](scr
 
 ## Fleet burst (bm-ch-fleet-burst)
 
-Same 500 due jobs plus colliding recurring cohort, run on coordinator-worker processes against a shared store. The scale axis is `--worker-hosts` (1/2/4), not in-process worker concurrency. Quote a public number only from a postgres-redis AWS report with `status=ok`.
+Same 500 due jobs plus colliding recurring cohort, run on a coordinator process plus distinct worker hosts against a shared Postgres+Redis store. The published scale axis is worker host count (1/2/4). On AWS, set `CHRONON_BENCH_COORDINATOR_ONLY=1` on the coordinator and `CHRONON_BENCH_DRAIN_ONLY=1` on each worker with a shared `CHRONON_BENCH_CELL_ID`. Quote a public number only from a postgres-redis AWS report with `status=ok`.
 
 ```bash
 CHRONON_BENCH_HARDWARE=aws-c6i-large \

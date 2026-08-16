@@ -31,12 +31,24 @@ impl BootstrapSession {
         self.spawn_split_runtime(worker_count, false).await
     }
 
+    /// Start a coordinator with no in-process workers (remote worker hosts attach separately).
+    pub async fn spawn_coordinator_only(&mut self) -> Result<()> {
+        if self.split.is_some() {
+            return Ok(());
+        }
+        self.spawn_split_runtime(0, true).await
+    }
+
     async fn spawn_split_runtime(
         &mut self,
         worker_count: u32,
         with_coordinator: bool,
     ) -> Result<()> {
-        let count = worker_count.max(1);
+        let count = if with_coordinator {
+            worker_count
+        } else {
+            worker_count.max(1)
+        };
         let store = self
             .store
             .clone()
@@ -70,7 +82,10 @@ impl BootstrapSession {
         let mut worker_stops = Vec::with_capacity(count as usize);
         let mut worker_tasks = Vec::with_capacity(count as usize);
         for i in 0..count {
-            let worker_id = format!("worker-{i}");
+            let worker_id = std::env::var("CHRONON_INSTANCE_ID")
+                .ok()
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| format!("worker-{i}"));
             let mut worker = ChrononBuilder::new()
                 .scheduler_store(Arc::clone(&store_dyn))
                 .context_factory(Arc::new(JsonScriptContextFactory))
