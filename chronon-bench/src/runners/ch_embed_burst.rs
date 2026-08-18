@@ -373,7 +373,8 @@ async fn wait_for_expected(
     workload: &BurstWorkload,
     seeded: &SeededNames,
 ) -> Result<()> {
-    let deadline = Instant::now() + workload.drain_timeout.max(workload.recurring_wait);
+    let started = Instant::now();
+    let deadline = started + workload.drain_timeout.max(workload.recurring_wait);
     let expected = if workload.script_name == FAIL_SCRIPT {
         0
     } else {
@@ -384,22 +385,22 @@ async fn wait_for_expected(
             bail!("drain timeout before expected terminal runs");
         }
         let runs = list_all_runs(store).await?;
-        let success = runs
-            .iter()
-            .filter(|r| r.status == RunStatus::Success)
-            .count() as u64;
-        let failed = runs
-            .iter()
-            .filter(|r| r.status == RunStatus::Failed || r.status == RunStatus::Timeout)
-            .count();
+        let (success, inflight) = success_and_inflight(&runs);
         if workload.script_name == FAIL_SCRIPT {
+            let failed = runs
+                .iter()
+                .filter(|r| r.status == RunStatus::Failed || r.status == RunStatus::Timeout)
+                .count();
             if failed >= seeded.burst.len() {
                 return Ok(());
             }
         } else {
-            let missed = missed_five_min(&runs, seeded);
-            if success >= expected && missed == 0 {
-                return Ok(());
+            match burst_wait_poll(success, expected, inflight) {
+                BurstWaitPoll::OverCount => {
+                    bail!("over-count: {success} successes exceeds expected {expected}");
+                }
+                BurstWaitPoll::Done if missed_five_min(&runs, seeded) == 0 => return Ok(()),
+                BurstWaitPoll::Done | BurstWaitPoll::Continue => {}
             }
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -452,6 +453,34 @@ fn burst_correctness_pass(
     !fail_probe && !timed_out && successful_runs == expected && missed == 0
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BurstWaitPoll {
+    Continue,
+    Done,
+    OverCount,
+}
+
+/// Drain must land on an exact idle Success count, then stop. Holding past that
+/// lets the next recurring fire create an over-count.
+fn burst_wait_poll(success: u64, expected: u64, inflight: u64) -> BurstWaitPoll {
+    if success > expected {
+        return BurstWaitPoll::OverCount;
+    }
+    if success == expected && inflight == 0 {
+        return BurstWaitPoll::Done;
+    }
+    BurstWaitPoll::Continue
+}
+
+fn success_and_inflight(runs: &[Run]) -> (u64, u64) {
+    let success = runs
+        .iter()
+        .filter(|r| r.status == RunStatus::Success)
+        .count() as u64;
+    let inflight = runs.iter().filter(|r| r.status.is_active()).count() as u64;
+    (success, inflight)
+}
+
 fn env_flag(name: &str) -> bool {
     std::env::var(name).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE"))
 }
@@ -485,19 +514,21 @@ async fn wait_for_success_count(
     store: &dyn SchedulerStore,
     workload: &BurstWorkload,
 ) -> Result<()> {
-    let deadline = Instant::now() + workload.drain_timeout.max(workload.recurring_wait);
+    let started = Instant::now();
+    let deadline = started + workload.drain_timeout.max(workload.recurring_wait);
     let expected = workload.expected_runs();
     loop {
         if Instant::now() >= deadline {
             bail!("worker drain timeout before expected terminal runs");
         }
         let runs = list_all_runs(store).await?;
-        let success = runs
-            .iter()
-            .filter(|r| r.status == RunStatus::Success)
-            .count() as u64;
-        if success >= expected {
-            return Ok(());
+        let (success, inflight) = success_and_inflight(&runs);
+        match burst_wait_poll(success, expected, inflight) {
+            BurstWaitPoll::OverCount => {
+                bail!("over-count: {success} successes exceeds expected {expected}");
+            }
+            BurstWaitPoll::Done => return Ok(()),
+            BurstWaitPoll::Continue => {}
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -832,6 +863,15 @@ mod tests {
         assert!(!burst_correctness_pass(7, 8, 0, false, false));
         assert!(burst_correctness_pass(8, 8, 0, false, false));
         assert!(!burst_correctness_pass(8, 8, 1, false, false));
+    }
+
+    #[test]
+    fn wait_poll_stops_at_exact_idle_count() {
+        assert_eq!(burst_wait_poll(580, 580, 0), BurstWaitPoll::Done);
+        assert_eq!(burst_wait_poll(580, 580, 2), BurstWaitPoll::Continue);
+        assert_eq!(burst_wait_poll(586, 580, 0), BurstWaitPoll::OverCount);
+        assert_eq!(burst_wait_poll(560, 580, 0), BurstWaitPoll::Continue);
+        assert_eq!(burst_wait_poll(579, 580, 0), BurstWaitPoll::Continue);
     }
 
     #[test]
