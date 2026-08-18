@@ -84,10 +84,14 @@ impl BurstWorkload {
                 Duration::from_secs(20),
             )
         } else {
+            // Only the five-minute analog refires during drain. 15-minute and hourly
+            // crons that share :00/:15/:30/:45 would add an extra wave that is not
+            // in expected_runs. First 15-minute/hourly runs still come from the
+            // immediate upsert.
             (
                 "0 */5 * * * *".to_string(),
-                "0 */15 * * * *".to_string(),
-                "0 0 * * * *".to_string(),
+                "0 0 1 1 * *".to_string(),
+                "0 0 1 1 * *".to_string(),
                 Duration::from_secs(330),
                 Duration::from_secs(900),
             )
@@ -754,6 +758,14 @@ mod tests {
     fn expected_runs_counts_second_five_min_wave() {
         let w = BurstWorkload::new(500, 60, false).unwrap();
         assert_eq!(w.expected_runs(), 500 + 60 + 20);
+    }
+
+    #[test]
+    fn slow_workload_only_refires_five_min_analog() {
+        let w = BurstWorkload::new(500, 60, false).unwrap();
+        assert_eq!(w.five_min_cron, "0 */5 * * * *");
+        assert_eq!(w.fifteen_min_cron, "0 0 1 1 * *");
+        assert_eq!(w.hourly_cron, "0 0 1 1 * *");
     }
 
     #[test]
