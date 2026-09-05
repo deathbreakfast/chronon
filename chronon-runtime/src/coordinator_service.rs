@@ -224,12 +224,27 @@ impl CoordinatorService {
         job_id: &str,
         params_override: Option<Value>,
     ) -> Result<String> {
+        self.run_now_with_params_and_actor(job_id, params_override, None)
+            .await
+    }
+
+    /// Enqueue an immediate run with optional params and actor snapshot overrides.
+    ///
+    /// When `actor_override` is `Some`, it is written onto the run (user-triggered
+    /// enqueue). When `None`, the job's stored `actor_json` is used (autonomous /
+    /// default jobs typically System).
+    pub async fn run_now_with_params_and_actor(
+        &self,
+        job_id: &str,
+        params_override: Option<Value>,
+        actor_override: Option<Value>,
+    ) -> Result<String> {
         let Some(job) = self.store.get_job(job_id).await? else {
             return Err(ChrononError::JobNotFound(job_id.to_string()));
         };
         let now = Utc::now();
         let mut run = Run::for_job(&job.job_id, &job.script_name, now);
-        run.actor_json = job.actor_json.clone();
+        run.actor_json = actor_override.unwrap_or_else(|| job.actor_json.clone());
         run.params_json = params_override.unwrap_or_else(|| job.params_json.clone());
         run.pool_id = Some(job_execution_pool_id(&job));
         let run_id = run.run_id.clone();
