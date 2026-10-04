@@ -403,7 +403,7 @@ async fn run_now_ok() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let parsed: ApiResponse<String> = json_body(resp).await;
-    assert!(!parsed.data.unwrap().is_empty());
+    assert_ne!(parsed.data.unwrap(), "");
 }
 
 #[tokio::test]
@@ -440,7 +440,7 @@ async fn get_job_revisions_ok() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let parsed: ApiResponse<Vec<serde_json::Value>> = json_body(resp).await;
-    assert!(!parsed.data.unwrap().is_empty());
+    assert_ne!(parsed.data.unwrap(), [] as [serde_json::Value; 0]);
 }
 
 #[tokio::test]
