@@ -812,3 +812,104 @@ async fn auth_middleware_rejects_without_bearer() {
     assert!(parsed.success);
     assert_eq!(parsed.data.unwrap().len(), 1);
 }
+
+async fn upsert(app: &Router, body: serde_json::Value) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/jobs/upsert")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn upsert_job_pool_round_trips_happy_path() {
+    let state = test_state();
+    let app = test_app(state.clone());
+    let base = serde_json::json!({
+        "job_name": "pooled",
+        "script_name": "test_script",
+        "schedule_kind": "manual",
+    });
+
+    let mut with_pool = base.clone();
+    with_pool["pool"] = serde_json::json!(" chronon-mve-a ");
+    let resp = upsert(&app, with_pool).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let parsed: ApiResponse<JobResponse> = json_body(resp).await;
+    let created = parsed.data.unwrap();
+    assert_eq!(created.pool.as_deref(), Some("chronon-mve-a"));
+
+    let resp = upsert(&app, base.clone()).await;
+    let kept: ApiResponse<JobResponse> = json_body(resp).await;
+    assert_eq!(
+        kept.data.unwrap().pool.as_deref(),
+        Some("chronon-mve-a"),
+        "omitted pool keeps the stored one"
+    );
+
+    let job = state
+        .chronon
+        .coordinator
+        .get_job(&created.job_id)
+        .await
+        .unwrap();
+    let run = seed_run(&state, &job).await;
+    let resp = test_app(state.clone())
+        .oneshot(
+            Request::builder()
+                .uri(format!("/runs/{}", run.run_id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let run: ApiResponse<RunResponse> = json_body(resp).await;
+    assert_eq!(run.data.unwrap().pool_id.as_deref(), Some("chronon-mve-a"));
+
+    let mut cleared = base;
+    cleared["pool"] = serde_json::json!("");
+    let resp = upsert(&app, cleared).await;
+    let cleared: ApiResponse<JobResponse> = json_body(resp).await;
+    assert_eq!(
+        cleared.data.unwrap().pool,
+        None,
+        "empty pool resets to default"
+    );
+}
+
+#[tokio::test]
+async fn upsert_job_rejects_malformed_pool_sad() {
+    let state = test_state();
+    let app = test_app(state.clone());
+    let long = "p".repeat(129);
+    for bad in ["general:x", "{general}", "pool a", long.as_str()] {
+        let resp = upsert(
+            &app,
+            serde_json::json!({
+                "job_name": "bad-pool",
+                "script_name": "test_script",
+                "schedule_kind": "manual",
+                "pool": bad,
+            }),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{bad}");
+        let parsed: ApiResponse<JobResponse> = json_body(resp).await;
+        assert!(parsed.error.unwrap().starts_with("Invalid pool"));
+    }
+    assert!(
+        state
+            .chronon
+            .coordinator
+            .get_job_by_name("bad-pool")
+            .await
+            .is_none(),
+        "rejected upsert stores nothing"
+    );
+}
