@@ -3,7 +3,7 @@ use quote::quote;
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::spanned::Spanned;
-use syn::{ItemFn, LitStr, Pat, PatType, Signature};
+use syn::{Attribute, Expr, ExprLit, ItemFn, Lit, LitStr, Meta, Pat, PatType, Signature};
 
 use crate::script_attrs::ScriptAttrs;
 use crate::script_validate::collect_script_params;
@@ -51,6 +51,10 @@ pub(crate) fn expand_script(attrs: &ScriptAttrs, input: &ItemFn) -> syn::Result<
     let invoke_script = generate_invoke_script(internal_fn_name, &params, is_unit_struct)?;
     let signature_json_lit = LitStr::new(&signature_json, fn_name.span());
     let script_name_lit = LitStr::new(script_name, fn_name.span());
+    let with_description = doc_description(fn_attrs).map(|description| {
+        let description_lit = LitStr::new(&description, fn_name.span());
+        quote! { .with_description(#description_lit) }
+    });
 
     Ok(quote! {
         #params_struct
@@ -74,8 +78,43 @@ pub(crate) fn expand_script(attrs: &ScriptAttrs, input: &ItemFn) -> syn::Result<
                 #signature_json_lit,
                 #signature_hash,
             )
+            #with_description
         }
     })
+}
+
+/// First paragraph of the `///` doc comment as one trimmed line, or `None` when there is none.
+fn doc_description(attrs: &[Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        let Meta::NameValue(nv) = &attr.meta else {
+            continue;
+        };
+        if !nv.path.is_ident("doc") {
+            continue;
+        }
+        let Expr::Lit(ExprLit {
+            lit: Lit::Str(text),
+            ..
+        }) = &nv.value
+        else {
+            continue;
+        };
+        let line = text.value();
+        let line = line.trim();
+        if line.is_empty() {
+            if lines.is_empty() {
+                continue;
+            }
+            break;
+        }
+        lines.push(line.to_string());
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join(" "))
+    }
 }
 
 fn build_signature_metadata(params: &[&PatType]) -> syn::Result<(String, u64)> {
@@ -240,5 +279,31 @@ mod tests {
         assert!(expanded.contains("ScriptDescriptor"));
         assert!(expanded.contains("inventory"));
         assert!(expanded.contains("DailyCleanupParams"));
+        assert!(!expanded.contains("with_description"));
+    }
+
+    #[test]
+    fn script_expand_uses_first_doc_paragraph_as_description() {
+        let attrs = ScriptAttrs {
+            name: "daily_cleanup".into(),
+        };
+        let input: ItemFn = parse_quote! {
+            /// Removes stale rows
+            /// older than a week.
+            ///
+            /// Second paragraph is not part of the description.
+            pub async fn daily_cleanup(
+                ctx: Box<dyn chronon_core::ScriptContext>,
+            ) -> chronon_core::Result<()> {
+                let _ = ctx;
+                Ok(())
+            }
+        };
+        let expanded = expand_script(&attrs, &input).expect("expand").to_string();
+        assert!(expanded.contains("with_description (\"Removes stale rows older than a week.\")"));
+        assert!(!expanded.contains("Second paragraph is not part of the description. \""));
+        assert!(
+            !expanded.contains("with_description (\"Removes stale rows older than a week. Second")
+        );
     }
 }

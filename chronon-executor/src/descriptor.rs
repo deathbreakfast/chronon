@@ -26,6 +26,8 @@ pub struct ScriptDescriptor {
     pub signature_json: &'static str,
     /// Hash of the signature for version checking.
     pub signature_hash: u64,
+    /// One-line summary from the handler's doc comment (empty when it has none).
+    pub description: &'static str,
 }
 
 impl ScriptDescriptor {
@@ -36,6 +38,7 @@ impl ScriptDescriptor {
             invoke,
             signature_json: "{}",
             signature_hash: 0,
+            description: "",
         }
     }
 
@@ -51,7 +54,14 @@ impl ScriptDescriptor {
             invoke,
             signature_json,
             signature_hash,
+            description: "",
         }
+    }
+
+    /// Set the description shown in script listings.
+    pub const fn with_description(mut self, description: &'static str) -> Self {
+        self.description = description;
+        self
     }
 }
 
@@ -61,6 +71,7 @@ impl std::fmt::Debug for ScriptDescriptor {
             .field("name", &self.name)
             .field("signature_json", &self.signature_json)
             .field("signature_hash", &self.signature_hash)
+            .field("description", &self.description)
             .field("invoke", &"<fn>")
             .finish()
     }

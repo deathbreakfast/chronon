@@ -11,6 +11,7 @@ struct StoredScript {
     invoke: InvokeFn,
     signature_json: String,
     signature_hash: u64,
+    description: String,
 }
 
 /// In-memory script registry with optional link-time inventory discovery.
@@ -91,12 +92,15 @@ impl ScriptRegistry {
     /// Register every script descriptor collected via link-time inventory.
     pub fn register_from_inventory(&mut self) {
         for desc in quark::inventory::iter::<ScriptDescriptor> {
-            self.register(&ScriptDescriptor::with_signature(
-                desc.name,
-                desc.invoke,
-                desc.signature_json,
-                desc.signature_hash,
-            ));
+            self.register(
+                &ScriptDescriptor::with_signature(
+                    desc.name,
+                    desc.invoke,
+                    desc.signature_json,
+                    desc.signature_hash,
+                )
+                .with_description(desc.description),
+            );
         }
     }
 
@@ -111,6 +115,7 @@ impl ScriptRegistry {
                 invoke: desc.invoke,
                 signature_json: desc.signature_json.to_string(),
                 signature_hash: desc.signature_hash,
+                description: desc.description.to_string(),
             },
         );
     }
@@ -122,6 +127,7 @@ impl ScriptRegistry {
             invoke: s.invoke,
             signature_json: s.signature_json.as_str(),
             signature_hash: s.signature_hash,
+            description: s.description.as_str(),
         })
     }
 
@@ -165,6 +171,8 @@ pub struct ScriptDescriptorRef<'a> {
     pub signature_json: &'a str,
     /// Compile-time hash of the signature for drift detection.
     pub signature_hash: u64,
+    /// One-line summary from the handler's doc comment (empty when it has none).
+    pub description: &'a str,
 }
 
 fn stored_to_ref(s: &StoredScript) -> ScriptDescriptorRef<'_> {
@@ -173,6 +181,7 @@ fn stored_to_ref(s: &StoredScript) -> ScriptDescriptorRef<'_> {
         invoke: s.invoke,
         signature_json: s.signature_json.as_str(),
         signature_hash: s.signature_hash,
+        description: s.description.as_str(),
     }
 }
 
@@ -198,5 +207,18 @@ mod tests {
         reg.register(&ScriptDescriptor::new("hello", stub_invoke));
         assert!(reg.contains("hello"));
         assert_eq!(reg.len(), 1);
+    }
+
+    #[test]
+    fn description_defaults_to_empty_and_survives_register() {
+        let mut reg = ScriptRegistry::new();
+        reg.register(&ScriptDescriptor::new("plain", stub_invoke));
+        reg.register(
+            &ScriptDescriptor::with_signature("doc", stub_invoke, "{}", 0)
+                .with_description("Cleans up."),
+        );
+        assert_eq!(reg.get("plain").expect("plain").description, "");
+        assert_eq!(reg.get("doc").expect("doc").description, "Cleans up.");
+        assert_eq!(reg.list()[0].description, "Cleans up.");
     }
 }
