@@ -7,12 +7,15 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use chronon_core::models::{
-    Job, JobRevision, PartitionAssignment, Run, RunKey, RunStatus, SchedulerLeader, Script, Worker,
+    ChildOutcome, ChildSet, Job, JobRevision, PartitionAssignment, Run, RunKey, RunStatus,
+    SchedulerLeader, Script, ShardSet, Worker,
 };
 use chronon_core::store::SchedulerStore;
 use chronon_core::Result;
 
-use crate::{claims, coordinator, jobs, runs, SqlSchedulerStore};
+use serde_json::Value;
+
+use crate::{claims, coordinator, jobs, runs, sets, SqlSchedulerStore};
 
 #[async_trait]
 impl SchedulerStore for SqlSchedulerStore {
@@ -128,6 +131,55 @@ impl SchedulerStore for SqlSchedulerStore {
 
     async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>> {
         runs::reclaim_expired_run_leases(self, now).await
+    }
+
+    async fn set_run_outputs(&self, run_id: &str, outputs: &Value) -> Result<()> {
+        sets::set_run_outputs(self, run_id, outputs).await
+    }
+
+    async fn count_active_runs_for_job(&self, job_id: &str) -> Result<i64> {
+        sets::count_active_runs_for_job(self, job_id).await
+    }
+
+    async fn create_child_set_with_runs(&self, set: &ChildSet, runs: &[Run]) -> Result<()> {
+        sets::create_child_set_with_runs(self, set, runs).await
+    }
+
+    async fn get_child_set(&self, set_id: &str) -> Result<Option<ChildSet>> {
+        sets::get_child_set(self, set_id).await
+    }
+
+    async fn list_child_sets_for_run(&self, parent_run_id: &str) -> Result<Vec<ChildSet>> {
+        sets::list_child_sets_for_run(self, parent_run_id).await
+    }
+
+    async fn record_child_result(&self, set_id: &str, outcome: ChildOutcome) -> Result<ChildSet> {
+        sets::record_child_result(self, set_id, outcome).await
+    }
+
+    async fn settle_child_set(&self, set_id: &str, at: DateTime<Utc>) -> Result<()> {
+        sets::settle_child_set(self, set_id, at).await
+    }
+
+    async fn create_shard_set(&self, set: &ShardSet) -> Result<()> {
+        sets::create_shard_set(self, set).await
+    }
+
+    async fn get_shard_set(&self, set_id: &str) -> Result<Option<ShardSet>> {
+        sets::get_shard_set(self, set_id).await
+    }
+
+    async fn update_shard_set(&self, set: &ShardSet, expected_next_start: &Value) -> Result<bool> {
+        sets::update_shard_set(self, set, expected_next_start).await
+    }
+
+    async fn set_shard_checkpoint(
+        &self,
+        set_id: &str,
+        shard_index: u32,
+        value: &Value,
+    ) -> Result<()> {
+        sets::set_shard_checkpoint(self, set_id, shard_index, value).await
     }
 
     async fn append_revision(&self, revision: &JobRevision) -> Result<()> {

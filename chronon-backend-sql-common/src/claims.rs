@@ -123,6 +123,7 @@ pub(crate) async fn find_due_job_ids_in_partitions(
             "SELECT job_id FROM chronon_job
              WHERE enabled = 1
                AND schedule_kind != 'manual'
+               AND schedule_kind != 'child'
                AND next_run_at IS NOT NULL
                AND next_run_at <= ?
                AND partition_hash IN ({placeholders})
@@ -164,6 +165,7 @@ pub(crate) async fn min_next_run_at_in_partitions(
             "SELECT MIN(next_run_at) AS min_next FROM chronon_job
              WHERE enabled = 1
                AND schedule_kind != 'manual'
+               AND schedule_kind != 'child'
                AND next_run_at IS NOT NULL
                AND partition_hash IN ({placeholders})"
         ),

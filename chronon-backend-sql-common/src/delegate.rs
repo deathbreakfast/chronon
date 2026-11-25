@@ -160,6 +160,89 @@ macro_rules! delegate_scheduler_store {
                 self.$field.reclaim_expired_run_leases(now).await
             }
 
+            async fn set_run_outputs(
+                &self,
+                run_id: &str,
+                outputs: &$crate::__JsonValue,
+            ) -> ::chronon_core::Result<()> {
+                self.$field.set_run_outputs(run_id, outputs).await
+            }
+
+            async fn count_active_runs_for_job(&self, job_id: &str) -> ::chronon_core::Result<i64> {
+                self.$field.count_active_runs_for_job(job_id).await
+            }
+
+            async fn create_child_set_with_runs(
+                &self,
+                set: &::chronon_core::models::ChildSet,
+                runs: &[::chronon_core::models::Run],
+            ) -> ::chronon_core::Result<()> {
+                self.$field.create_child_set_with_runs(set, runs).await
+            }
+
+            async fn get_child_set(
+                &self,
+                set_id: &str,
+            ) -> ::chronon_core::Result<Option<::chronon_core::models::ChildSet>> {
+                self.$field.get_child_set(set_id).await
+            }
+
+            async fn list_child_sets_for_run(
+                &self,
+                parent_run_id: &str,
+            ) -> ::chronon_core::Result<Vec<::chronon_core::models::ChildSet>> {
+                self.$field.list_child_sets_for_run(parent_run_id).await
+            }
+
+            async fn record_child_result(
+                &self,
+                set_id: &str,
+                outcome: ::chronon_core::models::ChildOutcome,
+            ) -> ::chronon_core::Result<::chronon_core::models::ChildSet> {
+                self.$field.record_child_result(set_id, outcome).await
+            }
+
+            async fn settle_child_set(
+                &self,
+                set_id: &str,
+                at: ::chrono::DateTime<::chrono::Utc>,
+            ) -> ::chronon_core::Result<()> {
+                self.$field.settle_child_set(set_id, at).await
+            }
+
+            async fn create_shard_set(
+                &self,
+                set: &::chronon_core::models::ShardSet,
+            ) -> ::chronon_core::Result<()> {
+                self.$field.create_shard_set(set).await
+            }
+
+            async fn get_shard_set(
+                &self,
+                set_id: &str,
+            ) -> ::chronon_core::Result<Option<::chronon_core::models::ShardSet>> {
+                self.$field.get_shard_set(set_id).await
+            }
+
+            async fn update_shard_set(
+                &self,
+                set: &::chronon_core::models::ShardSet,
+                expected_next_start: &$crate::__JsonValue,
+            ) -> ::chronon_core::Result<bool> {
+                self.$field.update_shard_set(set, expected_next_start).await
+            }
+
+            async fn set_shard_checkpoint(
+                &self,
+                set_id: &str,
+                shard_index: u32,
+                value: &$crate::__JsonValue,
+            ) -> ::chronon_core::Result<()> {
+                self.$field
+                    .set_shard_checkpoint(set_id, shard_index, value)
+                    .await
+            }
+
             async fn append_revision(
                 &self,
                 revision: &::chronon_core::models::JobRevision,

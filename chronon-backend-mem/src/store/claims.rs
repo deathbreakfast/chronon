@@ -78,7 +78,7 @@ pub(super) fn find_due_job_ids_in_partitions(
         .jobs
         .read()
         .values()
-        .filter(|j| j.enabled && j.schedule_kind != ScheduleKind::Manual)
+        .filter(|j| j.enabled && is_tick_scheduled(&j.schedule_kind))
         .filter(|j| j.next_run_at.is_some_and(|t| t <= due_until))
         .filter(|j| j.partition_hash.is_some_and(|h| parts.contains(&h)))
         .filter(|j| j.claim_lease_until.is_none_or(|u| u < now))
@@ -106,7 +106,7 @@ pub(super) fn min_next_run_at_in_partitions(
         .jobs
         .read()
         .values()
-        .filter(|j| j.enabled && j.schedule_kind != ScheduleKind::Manual)
+        .filter(|j| j.enabled && is_tick_scheduled(&j.schedule_kind))
         .filter(|j| j.partition_hash.is_some_and(|h| parts.contains(&h)))
         .filter_map(|j| j.next_run_at)
         .min())
@@ -152,4 +152,9 @@ pub(super) fn persist_post_tick_job_state(
         j.claim_lease_id = None;
         j.claim_lease_until = None;
     })
+}
+
+/// Whether the tick loop can find a job of this kind due (manual and child jobs never are).
+const fn is_tick_scheduled(kind: &ScheduleKind) -> bool {
+    matches!(kind, ScheduleKind::Cron | ScheduleKind::RunOnce)
 }

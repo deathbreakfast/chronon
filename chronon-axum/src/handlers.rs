@@ -85,7 +85,10 @@ pub async fn upsert_job(
         None => Job::new(&req.job_name, &req.script_name),
     };
     job.enabled = req.enabled;
-    job.schedule_kind = req.schedule_kind.into();
+    job.schedule_kind = match ScheduleKind::try_from(req.schedule_kind) {
+        Ok(kind) => kind,
+        Err(e) => return chronon_err(&e),
+    };
     job.cron_expr = req.cron_expr.clone();
     job.timezone = req.timezone.clone();
     job.params_json = req.params.clone();
@@ -151,12 +154,12 @@ pub async fn list_jobs(
     };
 
     if let Some(ref kind) = query.schedule_kind {
-        let ok = matches!(kind.as_str(), "cron" | "run_once" | "manual");
+        let ok = matches!(kind.as_str(), "cron" | "run_once" | "manual" | "child");
         if !ok {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ApiResponse::err(format!(
-                    "invalid schedule_kind '{kind}' (expected cron, run_once, or manual)"
+                    "invalid schedule_kind '{kind}' (expected cron, run_once, manual, or child)"
                 ))),
             );
         }
@@ -178,6 +181,7 @@ pub async fn list_jobs(
                         ScheduleKind::Cron => k == "cron",
                         ScheduleKind::RunOnce => k == "run_once",
                         ScheduleKind::Manual => k == "manual",
+                        ScheduleKind::Child { .. } => k == "child",
                     })
         })
         .collect();

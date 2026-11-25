@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::Utc;
 use chronon_core::models::{RunStatus, Worker, WorkerStatus};
 use chronon_core::store::SchedulerStore;
-use chronon_core::ChrononError;
+use chronon_core::{ChrononError, ContextFactory, RunValues};
 use chronon_executor::{execute_script, ExecuteScriptOutcome, ExecuteScriptRequest, Executor};
 use chronon_scheduler::{
     run_worker_lease_renew_secs, run_worker_lease_ttl_secs, worker_concurrency_from_env,
@@ -20,6 +20,7 @@ use crate::env::env_flag;
 use crate::lease_guard::AbortOnDrop;
 use crate::reclaim::run_reclaim_loop;
 use crate::retry::finalize_failed_run;
+use crate::run_scope::RunScopeFactory;
 
 fn worker_row_id(worker_id: &str) -> String {
     let mut s: String = worker_id
@@ -44,16 +45,24 @@ async fn warn_update_run(
 }
 
 /// Execute a script in a supervised task so handler panics become [`RunStatus::Failed`].
+///
+/// The host context factory is wrapped so the script's context answers
+/// [`ScriptContext::run`](chronon_core::ScriptContext::run) with `run_values`.
 async fn execute_script_catch_panic(
     executor: &Executor,
-    script_name: String,
-    actor_json: serde_json::Value,
-    params_json: serde_json::Value,
+    run: &chronon_core::models::Run,
+    run_values: RunValues,
     job_name: String,
-    run_id: String,
 ) -> ExecuteScriptOutcome {
+    let script_name = run.script_name.clone();
+    let actor_json = run.actor_json.clone();
+    let params_json = run.params_json.clone();
+    let run_id = run.run_id.clone();
     let registry = Arc::clone(&executor.registry);
-    let context_factory = Arc::clone(&executor.context_factory);
+    let context_factory: Arc<dyn ContextFactory> = Arc::new(RunScopeFactory::new(
+        Arc::clone(&executor.context_factory),
+        run_values,
+    ));
     let telemetry = Arc::clone(&executor.telemetry);
     let run_id_log = run_id.clone();
     match tokio::spawn(async move {
@@ -83,6 +92,27 @@ async fn execute_script_catch_panic(
             result: Err(ChrononError::Internal("handler task cancelled".into())),
             logs: chronon_telemetry::CapturedLogs::default(),
         },
+    }
+}
+
+/// Decode the values handed to the run's script. When they don't decode, the run fails
+/// (and is persisted) instead of running with made-up values.
+async fn run_values_or_fail(
+    store: &Arc<dyn SchedulerStore>,
+    run: &mut chronon_core::models::Run,
+    job: &chronon_core::models::Job,
+) -> Option<RunValues> {
+    match RunValues::for_run(run, job) {
+        Ok(mut values) => {
+            values.run.started_at = run.started_at;
+            Some(values)
+        }
+        Err(e) => {
+            warn!(run_id = %run.run_id, error = %e, "run values did not decode");
+            run.fail(e.to_string());
+            warn_update_run(store, run, "failed to persist run-values failure").await;
+            None
+        }
     }
 }
 
@@ -145,6 +175,10 @@ async fn worker_slot(
                 return;
             }
 
+            let Some(run_values) = run_values_or_fail(&store, &mut run, &job).await else {
+                return;
+            };
+
             let run_id = run.run_id.clone();
             let renew_store = Arc::clone(&store);
             let wid = worker_id.clone();
@@ -164,22 +198,11 @@ async fn worker_slot(
             let _renew_guard = AbortOnDrop::new(renew_handle);
 
             let started = Utc::now();
-            let script_name = run.script_name.clone();
-            let actor_json = run.actor_json.clone();
-            let params_json = run.params_json.clone();
             let job_name = job.job_name.clone();
-            let run_id_exec = run.run_id.clone();
 
             let (status_result, logs) = match job.timeout_ms {
                 Some(ms) if ms > 0 => {
-                    let exec = execute_script_catch_panic(
-                        &executor,
-                        script_name,
-                        actor_json,
-                        params_json,
-                        job_name,
-                        run_id_exec,
-                    );
+                    let exec = execute_script_catch_panic(&executor, &run, run_values, job_name);
                     match timeout(Duration::from_millis(ms as u64), exec).await {
                         Ok(outcome) => (
                             outcome
@@ -194,15 +217,8 @@ async fn worker_slot(
                     }
                 }
                 _ => {
-                    let outcome = execute_script_catch_panic(
-                        &executor,
-                        script_name,
-                        actor_json,
-                        params_json,
-                        job_name,
-                        run_id_exec,
-                    )
-                    .await;
+                    let outcome =
+                        execute_script_catch_panic(&executor, &run, run_values, job_name).await;
                     (
                         outcome
                             .result

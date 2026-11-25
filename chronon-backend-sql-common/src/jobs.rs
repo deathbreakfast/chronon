@@ -20,10 +20,11 @@ pub(crate) async fn upsert_job(store: &SqlSchedulerStore, job: &Job) -> Result<(
             run_once_completed_at, run_once_claim_expires_at, partition_hash, claim_lease_id,
             claim_lease_until, pool, region, placement_json, actor_json, params_json,
             concurrency, timeout_ms, retry_policy_json, misfire_policy_json, parent_limits_json,
-            next_run_at, current_revision, updated_at, created_at
+            parent_job_id, on_busy, sharding_json, next_run_at, current_revision, updated_at,
+            created_at
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         ON CONFLICT (job_id) DO UPDATE SET
             job_name = excluded.job_name,
@@ -51,6 +52,9 @@ pub(crate) async fn upsert_job(store: &SqlSchedulerStore, job: &Job) -> Result<(
             retry_policy_json = excluded.retry_policy_json,
             misfire_policy_json = excluded.misfire_policy_json,
             parent_limits_json = excluded.parent_limits_json,
+            parent_job_id = excluded.parent_job_id,
+            on_busy = excluded.on_busy,
+            sharding_json = excluded.sharding_json,
             next_run_at = excluded.next_run_at,
             current_revision = excluded.current_revision,
             updated_at = excluded.updated_at,
@@ -86,6 +90,9 @@ pub(crate) async fn upsert_job(store: &SqlSchedulerStore, job: &Job) -> Result<(
                 .bind(&row.retry_policy_json)
                 .bind(&row.misfire_policy_json)
                 .bind(&row.parent_limits_json)
+                .bind(&row.parent_job_id)
+                .bind(&row.on_busy)
+                .bind(&row.sharding_json)
                 .bind(row.next_run_at)
                 .bind(row.current_revision)
                 .bind(row.updated_at)

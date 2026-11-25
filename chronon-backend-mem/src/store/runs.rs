@@ -15,10 +15,13 @@ pub(super) fn create_run(store: &InMemorySchedulerStore, run: &Run) -> Result<()
 
 pub(super) fn update_run(store: &InMemorySchedulerStore, run: &Run) -> Result<()> {
     let mut runs = store.runs.write();
-    if !runs.contains_key(&run.run_id) {
+    let Some(stored) = runs.get_mut(&run.run_id) else {
         return Err(ChrononError::RunNotFound(run.run_id.clone()));
-    }
-    runs.insert(run.run_id.clone(), run.clone());
+    };
+    // `outputs_json` is only written by `set_run_outputs`, so a stale copy can't erase it.
+    let outputs = std::mem::take(&mut stored.outputs_json);
+    *stored = run.clone();
+    stored.outputs_json = outputs;
     Ok(())
 }
 

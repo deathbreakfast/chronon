@@ -316,6 +316,7 @@ dependencies = [
  "chrono",
  "chronon-core",
  "parking_lot",
+ "serde_json",
  "tokio",
 ]
 
@@ -340,6 +341,7 @@ dependencies = [
  "chronon-backend-sql-common",
  "chronon-core",
  "redis",
+ "serde_json",
  "tokio",
 ]
 

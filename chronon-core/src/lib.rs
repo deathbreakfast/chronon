@@ -19,6 +19,7 @@
 //! - [`store`] — [`SchedulerStore`] trait and persistence contract
 //! - [`models`] — jobs, runs, revisions, workers, schedule enums
 //! - [`context`] — [`ScriptContext`] and [`ContextFactory`] for script dispatch
+//! - [`run_values`] — [`RunValues`], the per-run values a script reads through [`ScriptContext::run`]
 //! - [`router`] — named store registration via [`StoreRouter`]
 //! - [`error`] — [`ChrononError`] and [`Result`]
 //!
@@ -36,6 +37,7 @@ pub mod handle;
 pub mod models;
 pub mod redact;
 pub mod router;
+pub mod run_values;
 pub mod sanitize;
 pub mod store;
 
@@ -55,11 +57,16 @@ pub use context::{
 pub use error::{ChrononError, Result};
 pub use handle::ScriptHandle;
 pub use models::{
-    Job, JobRevision, Lease, MisfirePolicy, PartitionAssignment, RetryPolicy, Run, RunKey,
-    RunStatus, ScheduleKind, SchedulerLeader, Script, Worker, WorkerStatus, MAX_JOB_CONCURRENCY,
-    MAX_LIST_LIMIT, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS, MAX_TIMEOUT_MS,
+    ChildOutcome, ChildSet, Job, JobRevision, Lease, MisfirePolicy, OnBusy, PartitionAssignment,
+    RetryPolicy, Run, RunKey, RunStatus, ScheduleKind, SchedulerLeader, Script, ShardSet, Worker,
+    WorkerStatus, MAX_JOB_CONCURRENCY, MAX_LIST_LIMIT, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY_MS,
+    MAX_TIMEOUT_MS,
 };
 pub use redact::{redact_credentials_in_text, redact_endpoint};
 pub use router::{default_store_from_global, StoreRouter, DEFAULT_STORE_NAME};
+pub use run_values::{
+    ChildValues, JobInfo, ParentValues, RootInfo, RunInfo, RunTrigger, RunValues, ScriptInfo,
+    ShardValues,
+};
 pub use sanitize::{sanitize_error_message, MAX_ERROR_MESSAGE_CHARS};
 pub use store::SchedulerStore;

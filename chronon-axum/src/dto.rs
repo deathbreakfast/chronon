@@ -66,14 +66,23 @@ pub enum ScheduleKindDto {
     RunOnce,
     /// Only runs triggered via API (`run_now`).
     Manual,
+    /// Spawned by runs of a parent job. Shown in responses only: upserts can't send it,
+    /// because a child job needs its parent's id.
+    #[serde(skip_deserializing)]
+    Child,
 }
 
-impl From<ScheduleKindDto> for ScheduleKind {
-    fn from(dto: ScheduleKindDto) -> Self {
+impl TryFrom<ScheduleKindDto> for ScheduleKind {
+    type Error = chronon_core::ChrononError;
+
+    fn try_from(dto: ScheduleKindDto) -> Result<Self, Self::Error> {
         match dto {
-            ScheduleKindDto::Cron => Self::Cron,
-            ScheduleKindDto::RunOnce => Self::RunOnce,
-            ScheduleKindDto::Manual => Self::Manual,
+            ScheduleKindDto::Cron => Ok(Self::Cron),
+            ScheduleKindDto::RunOnce => Ok(Self::RunOnce),
+            ScheduleKindDto::Manual => Ok(Self::Manual),
+            ScheduleKindDto::Child => Err(chronon_core::ChrononError::ParamError(
+                "schedule_kind 'child' can't be set through upsert".to_string(),
+            )),
         }
     }
 }
@@ -84,6 +93,7 @@ impl From<ScheduleKind> for ScheduleKindDto {
             ScheduleKind::Cron => Self::Cron,
             ScheduleKind::RunOnce => Self::RunOnce,
             ScheduleKind::Manual => Self::Manual,
+            ScheduleKind::Child { .. } => Self::Child,
         }
     }
 }

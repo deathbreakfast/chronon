@@ -5,8 +5,16 @@ use chrono::{DateTime, Utc};
 
 use crate::error::{ChrononError, Result};
 use crate::models::{
-    Job, JobRevision, PartitionAssignment, Run, RunKey, RunStatus, SchedulerLeader, Script, Worker,
+    ChildOutcome, ChildSet, Job, JobRevision, PartitionAssignment, Run, RunKey, RunStatus,
+    SchedulerLeader, Script, ShardSet, Worker,
 };
+use serde_json::Value;
+
+fn unsupported<T>(method: &str) -> Result<T> {
+    Err(ChrononError::Internal(format!(
+        "{method} is not supported by this store"
+    )))
+}
 
 /// Async persistence port for jobs, runs, revisions, and coordinator metadata.
 ///
@@ -106,6 +114,9 @@ pub trait SchedulerStore: Send + Sync {
     async fn create_run(&self, run: &Run) -> Result<()>;
 
     /// Replace an existing run row (status transitions, lease renewal, completion).
+    ///
+    /// Leaves [`Run::outputs_json`] unchanged, so a worker holding an older copy of the run
+    /// can't erase outputs saved through [`Self::set_run_outputs`].
     async fn update_run(&self, run: &Run) -> Result<()>;
 
     /// Look up a run by [`Run::run_id`].
@@ -224,6 +235,112 @@ pub trait SchedulerStore: Send + Sync {
     /// Clears `claimed_by`, `claim_lease_until`, and `started_at`. Returns the reclaimed
     /// `run_id` values so hybrid backends can re-enqueue claim queues.
     async fn reclaim_expired_run_leases(&self, now: DateTime<Utc>) -> Result<Vec<String>>;
+
+    /// Save the values a run published for its children ([`Run::outputs_json`]).
+    ///
+    /// # Contract
+    ///
+    /// Replaces `outputs_json` only; other columns are untouched. Returns
+    /// [`ChrononError::RunNotFound`] when no run has `run_id`. The default body returns
+    /// [`ChrononError::Internal`]; every bundled adapter overrides it.
+    async fn set_run_outputs(&self, run_id: &str, outputs: &Value) -> Result<()> {
+        let _ = (run_id, outputs);
+        unsupported("set_run_outputs")
+    }
+
+    /// Number of runs of `job_id` that hold a slot: [`RunStatus::Claimed`] or
+    /// [`RunStatus::Running`]. Queued runs are not counted.
+    ///
+    /// The default body returns [`ChrononError::Internal`]; every bundled adapter overrides it.
+    async fn count_active_runs_for_job(&self, job_id: &str) -> Result<i64> {
+        let _ = job_id;
+        unsupported("count_active_runs_for_job")
+    }
+
+    // --- Child and shard sets ---
+
+    /// Persist a [`ChildSet`] and all of its child runs in one transaction.
+    ///
+    /// # Contract
+    ///
+    /// All or nothing: when the set or any run fails to insert (for example a duplicate
+    /// `run_id`), nothing is written. Queued runs become claimable once this returns.
+    /// The default body returns [`ChrononError::Internal`]; every bundled adapter overrides it.
+    async fn create_child_set_with_runs(&self, set: &ChildSet, runs: &[Run]) -> Result<()> {
+        let _ = (set, runs);
+        unsupported("create_child_set_with_runs")
+    }
+
+    /// Look up a child set by [`ChildSet::set_id`].
+    async fn get_child_set(&self, set_id: &str) -> Result<Option<ChildSet>> {
+        let _ = set_id;
+        unsupported("get_child_set")
+    }
+
+    /// Child sets spawned by `parent_run_id`, oldest first.
+    async fn list_child_sets_for_run(&self, parent_run_id: &str) -> Result<Vec<ChildSet>> {
+        let _ = parent_run_id;
+        unsupported("list_child_sets_for_run")
+    }
+
+    /// Add one to the counter for `outcome` and return the updated set.
+    ///
+    /// # Contract
+    ///
+    /// The increment is atomic: concurrent calls never lose a count. Returns a storage error
+    /// when no set has `set_id`. Does not settle the set; callers check
+    /// [`ChildSet::finished`] against [`ChildSet::count`] and call [`Self::settle_child_set`].
+    async fn record_child_result(&self, set_id: &str, outcome: ChildOutcome) -> Result<ChildSet> {
+        let _ = (set_id, outcome);
+        unsupported("record_child_result")
+    }
+
+    /// Set [`ChildSet::settled_at`] to `at`. A no-op when the set is already settled or missing.
+    async fn settle_child_set(&self, set_id: &str, at: DateTime<Utc>) -> Result<()> {
+        let _ = (set_id, at);
+        unsupported("settle_child_set")
+    }
+
+    /// Persist a new [`ShardSet`]. `set_id` must be unique.
+    async fn create_shard_set(&self, set: &ShardSet) -> Result<()> {
+        let _ = set;
+        unsupported("create_shard_set")
+    }
+
+    /// Look up a shard set by [`ShardSet::set_id`].
+    async fn get_shard_set(&self, set_id: &str) -> Result<Option<ShardSet>> {
+        let _ = set_id;
+        unsupported("get_shard_set")
+    }
+
+    /// Replace a shard set's `next_start`, `end`, `rows_per_shard` and `paused`, but only if
+    /// its stored `next_start` still equals `expected_next_start`.
+    ///
+    /// # Contract
+    ///
+    /// Returns `true` when the row was updated and `false` when `next_start` had moved (or the
+    /// set is missing). `checkpoints_json` is left alone; use [`Self::set_shard_checkpoint`].
+    async fn update_shard_set(&self, set: &ShardSet, expected_next_start: &Value) -> Result<bool> {
+        let _ = (set, expected_next_start);
+        unsupported("update_shard_set")
+    }
+
+    /// Record `value` as the checkpoint of shard `shard_index`
+    /// (`checkpoints_json["<shard_index>"]`).
+    ///
+    /// # Contract
+    ///
+    /// Concurrent checkpoints for different shards of one set are all kept. Returns a storage
+    /// error when no set has `set_id`.
+    async fn set_shard_checkpoint(
+        &self,
+        set_id: &str,
+        shard_index: u32,
+        value: &Value,
+    ) -> Result<()> {
+        let _ = (set_id, shard_index, value);
+        unsupported("set_shard_checkpoint")
+    }
 
     // --- Revisions ---
 

@@ -20,6 +20,7 @@
 use serde_json::Value;
 
 use crate::error::{ChrononError, Result};
+use crate::run_values::RunValues;
 
 /// Opaque execution context for script handlers.
 ///
@@ -45,6 +46,14 @@ pub trait ScriptContext: Send {
 
     /// Actor JSON captured at schedule time and restored at dispatch.
     fn actor_json(&self) -> &Value;
+
+    /// Values for the run being executed: ids, attempt, parent, child and shard position.
+    ///
+    /// The worker wraps the host context so scripts it dispatches see their own run's values.
+    /// The default returns [`RunValues::detached`], so host contexts don't need to implement it.
+    fn run(&self) -> &RunValues {
+        RunValues::detached()
+    }
 }
 
 /// Builds a [`ScriptContext`] from JSON captured at enqueue time on the run.
@@ -223,6 +232,12 @@ mod tests {
         let ctx = factory.build(&actor).expect("ok");
         assert_eq!(ctx.label(), "system");
         assert_eq!(ctx.actor_json(), &actor);
+    }
+
+    #[test]
+    fn default_run_values_are_detached() {
+        let ctx = NoOpContextFactory.build(&Value::Null).expect("ok");
+        assert!(std::ptr::eq(ctx.run(), RunValues::detached()));
     }
 
     #[test]

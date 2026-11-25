@@ -76,6 +76,11 @@ pub struct Run {
     /// Index among siblings (for child runs).
     pub child_index: Option<i32>,
 
+    /// [`ChildSet`](crate::models::ChildSet) or [`ShardSet`](crate::models::ShardSet) this run
+    /// belongs to.
+    #[serde(default)]
+    pub child_set_id: Option<String>,
+
     // Timing
     /// When the run was scheduled to execute.
     pub scheduled_for: DateTime<Utc>,
@@ -113,6 +118,15 @@ pub struct Run {
     /// Parameters passed to the script.
     pub params_json: Value,
 
+    /// Run values ([`RunValues`](crate::RunValues)) handed to the script. `{}` means "derive
+    /// them from this row" (runs created before run values were stored).
+    #[serde(default = "empty_object")]
+    pub run_values_json: Value,
+
+    /// Values the script published for its children (`parent.output`).
+    #[serde(default = "empty_object")]
+    pub outputs_json: Value,
+
     // Output
     /// Captured stdout from the script.
     pub stdout_text: Option<String>,
@@ -131,6 +145,10 @@ pub struct Run {
 
     /// Worker lease expiry for reclaim / failover.
     pub claim_lease_until: Option<DateTime<Utc>>,
+}
+
+fn empty_object() -> Value {
+    Value::Object(serde_json::Map::default())
 }
 
 /// Position of a run in the newest-first run listing, used as a keyset cursor.
@@ -169,6 +187,7 @@ impl Run {
             parent_run_id: None,
             root_run_id: None,
             child_index: None,
+            child_set_id: None,
             scheduled_for,
             started_at: None,
             finished_at: None,
@@ -179,7 +198,9 @@ impl Run {
             placement_json: None,
             pool_id: None,
             actor_json: Value::Null,
-            params_json: Value::Object(serde_json::Map::default()),
+            params_json: empty_object(),
+            run_values_json: empty_object(),
+            outputs_json: empty_object(),
             stdout_text: None,
             stderr_text: None,
             error_json: None,
@@ -236,5 +257,23 @@ impl Run {
         if let Some(started) = self.started_at {
             self.duration_ms = Some((finished - started).num_milliseconds());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_json_without_new_fields_loads_defaults() {
+        let mut value = serde_json::to_value(Run::new("s", Utc::now())).unwrap();
+        let obj = value.as_object_mut().unwrap();
+        obj.remove("run_values_json");
+        obj.remove("outputs_json");
+        obj.remove("child_set_id");
+        let run: Run = serde_json::from_value(value).unwrap();
+        assert_eq!(run.run_values_json, serde_json::json!({}));
+        assert_eq!(run.outputs_json, serde_json::json!({}));
+        assert!(run.child_set_id.is_none());
     }
 }

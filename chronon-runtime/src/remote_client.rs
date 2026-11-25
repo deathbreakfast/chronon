@@ -75,6 +75,7 @@ enum ScheduleKindDto {
     Cron,
     RunOnce,
     Manual,
+    Child,
 }
 
 impl From<ScheduleKind> for ScheduleKindDto {
@@ -83,6 +84,7 @@ impl From<ScheduleKind> for ScheduleKindDto {
             ScheduleKind::Cron => Self::Cron,
             ScheduleKind::RunOnce => Self::RunOnce,
             ScheduleKind::Manual => Self::Manual,
+            ScheduleKind::Child { .. } => Self::Child,
         }
     }
 }

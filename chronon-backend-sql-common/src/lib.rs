@@ -45,6 +45,7 @@ mod macros;
 mod row;
 mod runs;
 mod schema;
+mod sets;
 mod store_impl;
 
 #[cfg(test)]
@@ -56,3 +57,8 @@ pub use backend::{
 pub use coordinator::LEADER_ROW_ID;
 pub use row::run_pool_key;
 pub use row::{row_to_worker, SchedulerLeaderRow};
+
+/// JSON value type named by [`delegate_scheduler_store!`] so wrapper crates don't need a
+/// direct `serde_json` dependency.
+#[doc(hidden)]
+pub use serde_json::Value as __JsonValue;

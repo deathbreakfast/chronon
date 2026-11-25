@@ -11,9 +11,11 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use chronon_backend_sql_common::run_pool_key;
-use chronon_core::models::{Run, RunKey, RunStatus};
+use chronon_core::models::{ChildOutcome, ChildSet, Run, RunKey, RunStatus, ShardSet};
 use chronon_core::store::SchedulerStore;
 use chronon_core::Result;
+
+use serde_json::Value;
 
 use crate::queue::RedisQueueLayer;
 
@@ -219,6 +221,65 @@ impl SchedulerStore for PostgresRedisSchedulerStore {
             }
         }
         Ok(ids)
+    }
+
+    async fn set_run_outputs(&self, run_id: &str, outputs: &Value) -> Result<()> {
+        self.sql.set_run_outputs(run_id, outputs).await
+    }
+
+    async fn count_active_runs_for_job(&self, job_id: &str) -> Result<i64> {
+        self.sql.count_active_runs_for_job(job_id).await
+    }
+
+    async fn create_child_set_with_runs(&self, set: &ChildSet, runs: &[Run]) -> Result<()> {
+        self.sql.create_child_set_with_runs(set, runs).await?;
+        // Enqueue only after the SQL transaction committed, like `create_run`.
+        for run in runs.iter().filter(|r| r.status == RunStatus::Queued) {
+            let pool = run_pool_key(run.pool_id.as_deref());
+            self.redis
+                .enqueue_run(pool, &run.run_id, run.scheduled_for)
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn get_child_set(&self, set_id: &str) -> Result<Option<ChildSet>> {
+        self.sql.get_child_set(set_id).await
+    }
+
+    async fn list_child_sets_for_run(&self, parent_run_id: &str) -> Result<Vec<ChildSet>> {
+        self.sql.list_child_sets_for_run(parent_run_id).await
+    }
+
+    async fn record_child_result(&self, set_id: &str, outcome: ChildOutcome) -> Result<ChildSet> {
+        self.sql.record_child_result(set_id, outcome).await
+    }
+
+    async fn settle_child_set(&self, set_id: &str, at: DateTime<Utc>) -> Result<()> {
+        self.sql.settle_child_set(set_id, at).await
+    }
+
+    async fn create_shard_set(&self, set: &ShardSet) -> Result<()> {
+        self.sql.create_shard_set(set).await
+    }
+
+    async fn get_shard_set(&self, set_id: &str) -> Result<Option<ShardSet>> {
+        self.sql.get_shard_set(set_id).await
+    }
+
+    async fn update_shard_set(&self, set: &ShardSet, expected_next_start: &Value) -> Result<bool> {
+        self.sql.update_shard_set(set, expected_next_start).await
+    }
+
+    async fn set_shard_checkpoint(
+        &self,
+        set_id: &str,
+        shard_index: u32,
+        value: &Value,
+    ) -> Result<()> {
+        self.sql
+            .set_shard_checkpoint(set_id, shard_index, value)
+            .await
     }
 
     async fn append_revision(&self, revision: &chronon_core::models::JobRevision) -> Result<()> {

@@ -4,6 +4,7 @@ mod claims;
 mod coordinator;
 mod jobs;
 mod runs;
+mod sets;
 mod trait_impl;
 
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use chronon_core::error::{ChrononError, Result};
 use chronon_core::models::{
-    Job, JobRevision, PartitionAssignment, Run, SchedulerLeader, Script, Worker,
+    ChildSet, Job, JobRevision, PartitionAssignment, Run, SchedulerLeader, Script, ShardSet, Worker,
 };
 use parking_lot::RwLock;
 
@@ -67,6 +68,10 @@ pub struct InMemorySchedulerStore {
     pub(super) partitions: RwLock<HashMap<String, PartitionAssignment>>,
     /// Registered workers keyed by worker id.
     pub(super) workers: RwLock<HashMap<String, Worker>>,
+    /// Child sets keyed by set id. Lock order when both are needed: `child_sets`, then `runs`.
+    pub(super) child_sets: RwLock<HashMap<String, ChildSet>>,
+    /// Shard sets keyed by set id.
+    pub(super) shard_sets: RwLock<HashMap<String, ShardSet>>,
 }
 
 impl InMemorySchedulerStore {
