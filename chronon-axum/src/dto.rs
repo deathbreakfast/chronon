@@ -203,6 +203,9 @@ pub struct ScriptResponse {
     pub signature_json: String,
     /// Stable hash of `signature_json` for change detection.
     pub signature_hash: u64,
+    /// One-line summary from the script's doc comment (empty when it has none).
+    #[serde(default)]
+    pub description: String,
 }
 
 /// Query params for `GET /jobs`.

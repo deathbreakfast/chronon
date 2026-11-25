@@ -344,6 +344,7 @@ pub async fn list_scripts(
             name: d.name.to_string(),
             signature_json: d.signature_json.to_string(),
             signature_hash: d.signature_hash,
+            description: d.description.to_string(),
         })
         .collect();
     Json(ApiResponse::ok(scripts))
