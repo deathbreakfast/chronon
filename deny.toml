@@ -6,6 +6,9 @@ yanked = "warn"
 ignore = [
     # paste is a direct chronon-testkit dep; track replacement.
     { id = "RUSTSEC-2024-0436", reason = "unmaintained paste; used by chronon-testkit macros" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no fixed release; temporary until the stack moves off chrono (security:RUSTSEC-2026-0543)" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained, no fixed release; temporary until the stack moves off chrono (security:RUSTSEC-2026-0543)" },
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys via sqlx, no compatible fixed release yet (security:RUSTSEC-2026-0459)" },
 ]
 
 [licenses]

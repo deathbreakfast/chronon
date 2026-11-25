@@ -133,15 +133,24 @@ where
     }
 
     /// Schedule a one-time execution at the specified time.
-    pub const fn run_once_at(mut self, at: DateTime<Utc>) -> Self {
+    pub fn run_once_at(mut self, at: DateTime<Utc>) -> Self {
         self.run_once_at = Some(at);
         self.schedule_kind = ScheduleKind::RunOnce;
         self
     }
 
     /// Set the job to manual-only (no automatic scheduling).
-    pub const fn manual(mut self) -> Self {
+    pub fn manual(mut self) -> Self {
         self.schedule_kind = ScheduleKind::Manual;
+        self
+    }
+
+    /// Make this a child job of `parent_job_id`: never due on its own, runs are spawned by
+    /// runs of the parent job.
+    pub fn child_of(mut self, parent_job_id: impl Into<String>) -> Self {
+        self.schedule_kind = ScheduleKind::Child {
+            parent_job_id: parent_job_id.into(),
+        };
         self
     }
 
@@ -218,13 +227,13 @@ where
                 .as_deref()
                 .map(|expr| CronExpr::parse(expr, self.timezone.as_deref()))
                 .transpose()?,
-            ScheduleKind::Manual | ScheduleKind::RunOnce => None,
+            ScheduleKind::Manual | ScheduleKind::RunOnce | ScheduleKind::Child { .. } => None,
         };
 
         let next_run_at = match self.schedule_kind {
             ScheduleKind::Cron => cron_expr.as_ref().and_then(CronExpr::next_from_now),
             ScheduleKind::RunOnce => self.run_once_at,
-            ScheduleKind::Manual => None,
+            ScheduleKind::Manual | ScheduleKind::Child { .. } => None,
         };
 
         let mut job = Job::new(&job_name, self.script_name);
@@ -282,6 +291,24 @@ mod tests {
             .expect("build");
         assert_eq!(job.schedule_kind, ScheduleKind::RunOnce);
         assert_eq!(job.next_run_at, Some(at));
+        assert!(job.cron_expr.is_none());
+    }
+
+    #[test]
+    fn build_child_of_sets_parent_and_no_schedule() {
+        let handle = ScriptHandle::<()>::new("part");
+        let job = JobBuilder::new(&handle)
+            .name("part-job")
+            .child_of("parent-job-id")
+            .build()
+            .expect("build");
+        assert_eq!(
+            job.schedule_kind,
+            ScheduleKind::Child {
+                parent_job_id: "parent-job-id".into()
+            }
+        );
+        assert!(job.next_run_at.is_none());
         assert!(job.cron_expr.is_none());
     }
 

@@ -11,6 +11,7 @@ use serde_json::Value;
 /// | [`Self::Cron`] | Yes | `cron_expr` (+ optional `timezone`) | Recurring schedules |
 /// | [`Self::RunOnce`] | Yes | `next_run_at` or `run_once_at` | One-shot deferred work |
 /// | [`Self::Manual`] | **No** | — | `CoordinatorService::run_now` or HTTP `POST /jobs/run_now` |
+/// | [`Self::Child`] | **No** | `parent_job_id` | Spawned by a run of the parent job |
 ///
 /// Prefer Chronon `JobBuilder` (`chronon_scheduler::JobBuilder`, re-exported from the
 /// `chronon` / `uf-chronon` facade) to set schedule kind — `.cron` / `.run_once_at` /
@@ -38,6 +39,35 @@ pub enum ScheduleKind {
     RunOnce,
     /// Never due for the tick loop — enqueue only via `run_now` (in-process or HTTP).
     Manual,
+    /// Never due for the tick loop — runs are spawned by a run of the parent job.
+    Child {
+        /// [`Job::job_id`] of the job whose runs spawn this job's runs.
+        parent_job_id: String,
+    },
+}
+
+/// What a run does when its job already has [`Job::concurrency`] runs claimed or running.
+///
+/// Stored on [`Job::on_busy`]. Rows written before this field existed load as [`Self::Skip`].
+///
+/// # Examples
+///
+/// ```
+/// use chronon_core::OnBusy;
+///
+/// assert_eq!(OnBusy::default(), OnBusy::Skip);
+/// assert_eq!(serde_json::to_value(OnBusy::QueueOne).unwrap(), "queue_one");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OnBusy {
+    /// Drop the new run while every slot is busy.
+    #[default]
+    Skip,
+    /// Keep at most one run waiting; drop further ones.
+    QueueOne,
+    /// Keep every run waiting until a slot frees up.
+    Queue,
 }
 
 /// Maximum concurrent runs accepted for a single job (API / model clamp).
@@ -245,8 +275,16 @@ pub struct Job {
     /// Misfire policy JSON ([`MisfirePolicy`]).
     pub misfire_policy_json: Value,
 
-    /// Limits for parent/child runs.
+    /// Limits for parent/child runs, including the child policy of a parent job.
     pub parent_limits_json: Option<Value>,
+
+    /// What to do with a new run when every concurrency slot is busy.
+    #[serde(default)]
+    pub on_busy: OnBusy,
+
+    /// Sharding settings for a sharded job (opaque at the store layer).
+    #[serde(default)]
+    pub sharding_json: Option<Value>,
 
     /// When the job should next run.
     pub next_run_at: Option<DateTime<Utc>>,
@@ -309,6 +347,8 @@ impl Job {
             retry_policy_json: serde_json::to_value(RetryPolicy::default()).unwrap_or_default(),
             misfire_policy_json: serde_json::to_value(MisfirePolicy::default()).unwrap_or_default(),
             parent_limits_json: None,
+            on_busy: OnBusy::default(),
+            sharding_json: None,
             next_run_at: None,
             current_revision: 1,
             updated_at: now,
@@ -419,6 +459,49 @@ mod policy_tests {
         assert_eq!(retry.base_delay_ms, MAX_RETRY_DELAY_MS);
         assert_eq!(retry.max_delay_ms, MAX_RETRY_DELAY_MS);
         assert!((retry.backoff_multiplier - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn clamp_security_bounds_keeps_child_kind_and_on_busy() {
+        let mut job = Job::new("n", "s");
+        job.schedule_kind = ScheduleKind::Child {
+            parent_job_id: "p1".into(),
+        };
+        job.on_busy = OnBusy::Queue;
+        job.clamp_security_bounds();
+        assert_eq!(
+            job.schedule_kind,
+            ScheduleKind::Child {
+                parent_job_id: "p1".into()
+            }
+        );
+        assert_eq!(job.on_busy, OnBusy::Queue);
+    }
+
+    #[test]
+    fn child_kind_serde_roundtrip() {
+        let kind = ScheduleKind::Child {
+            parent_job_id: "p1".into(),
+        };
+        let value = serde_json::to_value(&kind).unwrap();
+        assert_eq!(value, serde_json::json!({"child": {"parent_job_id": "p1"}}));
+        let back: ScheduleKind = serde_json::from_value(value).unwrap();
+        assert_eq!(back, kind);
+        assert_eq!(
+            serde_json::to_value(ScheduleKind::Manual).unwrap(),
+            "manual"
+        );
+    }
+
+    #[test]
+    fn job_json_without_new_fields_loads_defaults() {
+        let mut value = serde_json::to_value(Job::new("n", "s")).unwrap();
+        let obj = value.as_object_mut().unwrap();
+        obj.remove("on_busy");
+        obj.remove("sharding_json");
+        let job: Job = serde_json::from_value(value).unwrap();
+        assert_eq!(job.on_busy, OnBusy::Skip);
+        assert!(job.sharding_json.is_none());
     }
 
     #[test]

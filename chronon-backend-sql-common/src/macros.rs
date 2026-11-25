@@ -22,6 +22,32 @@ macro_rules! sql_execute {
     }};
 }
 
+/// Execute a parameterized SQL statement and return the number of rows it changed.
+#[macro_export]
+macro_rules! sql_execute_rows {
+    ($store:expr, $sql:expr, |$q:ident| $body:expr) => {{
+        let rows: u64 = match &$store.pool {
+            $crate::SqlPool::Sqlite(pool) => {
+                let $q = sqlx::query($sql);
+                let $q = $body;
+                $q.execute(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?
+                    .rows_affected()
+            }
+            $crate::SqlPool::Postgres(pool) => {
+                let $q = sqlx::query($sql);
+                let $q = $body;
+                $q.execute(pool)
+                    .await
+                    .map_err($crate::error_map::map_err)?
+                    .rows_affected()
+            }
+        };
+        Ok::<u64, chronon_core::error::ChrononError>(rows)
+    }};
+}
+
 /// Fetch zero or one row and map it through a closure.
 #[macro_export]
 macro_rules! sql_fetch_optional_map {

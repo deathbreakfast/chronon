@@ -25,6 +25,7 @@ mod lease_guard;
 mod reclaim;
 mod remote_client;
 mod retry;
+mod run_scope;
 mod runtime;
 mod worker;
 
@@ -32,4 +33,5 @@ pub use builder::{builder, ChrononBuilder, DeploymentShape};
 pub use coordinator_service::CoordinatorService;
 pub use remote_client::{resolve_remote_base_url, JobSummary, RemoteCoordinatorClient};
 pub use retry::finalize_failed_run;
+pub use run_scope::RunScope;
 pub use runtime::Chronon;

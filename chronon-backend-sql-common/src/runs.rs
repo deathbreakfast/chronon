@@ -12,57 +12,69 @@ use crate::error_map::map_err;
 use crate::row::{row_to_run, run_status_to_str, RunRow};
 use crate::{bind_sql, sql_execute, sql_fetch_all_map, sql_fetch_optional_map, SqlSchedulerStore};
 
-pub(crate) async fn create_run(store: &SqlSchedulerStore, run: &Run) -> Result<()> {
-    let row = RunRow::from_model(run)?;
-    let sql = bind_sql(
-        store.dialect,
-        "INSERT INTO chronon_run (
-            run_id, job_id, script_name, parent_run_id, root_run_id, child_index,
-            scheduled_for, started_at, finished_at, duration_ms, status, attempt,
-            instance_id, placement_json, pool_id, actor_json, params_json, stdout_text,
-            stderr_text, error_json, stats_json, claimed_by, claim_lease_until
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-        )",
-    );
-    match sql_execute!(store, &sql, |q| {
-        q.bind(&row.run_id)
-            .bind(&row.job_id)
-            .bind(&row.script_name)
-            .bind(&row.parent_run_id)
-            .bind(&row.root_run_id)
-            .bind(row.child_index)
-            .bind(row.scheduled_for)
-            .bind(row.started_at)
-            .bind(row.finished_at)
-            .bind(row.duration_ms)
-            .bind(&row.status)
-            .bind(row.attempt)
-            .bind(&row.instance_id)
-            .bind(&row.placement_json)
-            .bind(&row.pool_id)
-            .bind(&row.actor_json)
-            .bind(&row.params_json)
-            .bind(&row.stdout_text)
-            .bind(&row.stderr_text)
-            .bind(&row.error_json)
-            .bind(&row.stats_json)
-            .bind(&row.claimed_by)
-            .bind(row.claim_lease_until)
-    }) {
-        Ok(()) => Ok(()),
-        Err(ChrononError::StorageError { message, .. })
+/// `INSERT` for one run row; bind it with [`bind_run_insert!`].
+pub(crate) const INSERT_RUN_SQL: &str = "INSERT INTO chronon_run (
+    run_id, job_id, script_name, parent_run_id, root_run_id, child_index, child_set_id,
+    scheduled_for, started_at, finished_at, duration_ms, status, attempt,
+    instance_id, placement_json, pool_id, actor_json, params_json, run_values_json,
+    outputs_json, stdout_text, stderr_text, error_json, stats_json, claimed_by,
+    claim_lease_until
+) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)";
+
+/// Bind a [`RunRow`] to a query built from [`INSERT_RUN_SQL`].
+macro_rules! bind_run_insert {
+    ($q:expr, $row:expr) => {
+        $q.bind(&$row.run_id)
+            .bind(&$row.job_id)
+            .bind(&$row.script_name)
+            .bind(&$row.parent_run_id)
+            .bind(&$row.root_run_id)
+            .bind($row.child_index)
+            .bind(&$row.child_set_id)
+            .bind($row.scheduled_for)
+            .bind($row.started_at)
+            .bind($row.finished_at)
+            .bind($row.duration_ms)
+            .bind(&$row.status)
+            .bind($row.attempt)
+            .bind(&$row.instance_id)
+            .bind(&$row.placement_json)
+            .bind(&$row.pool_id)
+            .bind(&$row.actor_json)
+            .bind(&$row.params_json)
+            .bind(&$row.run_values_json)
+            .bind(&$row.outputs_json)
+            .bind(&$row.stdout_text)
+            .bind(&$row.stderr_text)
+            .bind(&$row.error_json)
+            .bind(&$row.stats_json)
+            .bind(&$row.claimed_by)
+            .bind($row.claim_lease_until)
+    };
+}
+pub(crate) use bind_run_insert;
+
+/// Map a unique-constraint failure on insert to a `duplicate run_id` storage error.
+pub(crate) fn map_duplicate_run(err: ChrononError, run_id: &str) -> ChrononError {
+    match err {
+        ChrononError::StorageError { message, .. }
             if message.contains("UNIQUE")
                 || message.contains("unique")
                 || message.contains("duplicate") =>
         {
-            Err(ChrononError::storage(format!(
-                "duplicate run_id: {}",
-                run.run_id
-            )))
+            ChrononError::storage(format!("duplicate run_id: {run_id}"))
         }
-        Err(e) => Err(e),
+        other => other,
     }
+}
+
+pub(crate) async fn create_run(store: &SqlSchedulerStore, run: &Run) -> Result<()> {
+    let row = RunRow::from_model(run)?;
+    let sql = bind_sql(store.dialect, INSERT_RUN_SQL);
+    let result = async { sql_execute!(store, &sql, |q| bind_run_insert!(q, row)) }.await;
+    result.map_err(|e| map_duplicate_run(e, &run.run_id))
 }
 
 pub(crate) async fn update_run(store: &SqlSchedulerStore, run: &Run) -> Result<()> {
@@ -71,9 +83,9 @@ pub(crate) async fn update_run(store: &SqlSchedulerStore, run: &Run) -> Result<(
         store.dialect,
         "UPDATE chronon_run SET
             job_id = ?, script_name = ?, parent_run_id = ?, root_run_id = ?, child_index = ?,
-            scheduled_for = ?, started_at = ?, finished_at = ?, duration_ms = ?, status = ?,
+            child_set_id = ?, scheduled_for = ?, started_at = ?, finished_at = ?, duration_ms = ?, status = ?,
             attempt = ?, instance_id = ?, placement_json = ?, pool_id = ?, actor_json = ?,
-            params_json = ?, stdout_text = ?, stderr_text = ?, error_json = ?, stats_json = ?,
+            params_json = ?, run_values_json = ?, stdout_text = ?, stderr_text = ?, error_json = ?, stats_json = ?,
             claimed_by = ?, claim_lease_until = ?
          WHERE run_id = ?",
     );
@@ -83,6 +95,7 @@ pub(crate) async fn update_run(store: &SqlSchedulerStore, run: &Run) -> Result<(
             .bind(&row.parent_run_id)
             .bind(&row.root_run_id)
             .bind(row.child_index)
+            .bind(&row.child_set_id)
             .bind(row.scheduled_for)
             .bind(row.started_at)
             .bind(row.finished_at)
@@ -94,6 +107,7 @@ pub(crate) async fn update_run(store: &SqlSchedulerStore, run: &Run) -> Result<(
             .bind(&row.pool_id)
             .bind(&row.actor_json)
             .bind(&row.params_json)
+            .bind(&row.run_values_json)
             .bind(&row.stdout_text)
             .bind(&row.stderr_text)
             .bind(&row.error_json)

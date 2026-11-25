@@ -11,7 +11,7 @@ use chronon_backend_postgres::{postgres_test_url, PostgresSchedulerStore};
 use chronon_backend_redis::{PostgresRedisSchedulerStore, RedisQueueLayer};
 use chronon_backend_sqlite::SqliteSchedulerStore;
 use chronon_core::store::SchedulerStore;
-use chronon_testkit::{run_list_runs_after_contract, run_store_contract};
+use chronon_testkit::{run_child_shard_contract, run_list_runs_after_contract, run_store_contract};
 use uuid::Uuid;
 
 #[tokio::test]
@@ -155,4 +155,94 @@ async fn composite_store_contract_postgres_redis() {
     run_store_contract(store)
         .await
         .expect("composite postgres+redis contract");
+}
+
+#[tokio::test]
+async fn mem_child_shard_contract() {
+    let store = InMemorySchedulerStore::new();
+    run_child_shard_contract(&store)
+        .await
+        .expect("mem child/shard contract");
+}
+
+#[tokio::test]
+async fn sqlite_child_shard_contract() {
+    let store = SqliteSchedulerStore::connect("sqlite://:memory:")
+        .await
+        .expect("connect");
+    run_child_shard_contract(&store)
+        .await
+        .expect("sqlite child/shard contract");
+}
+
+#[tokio::test]
+async fn sqlite_file_child_shard_contract() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("chronon.db");
+    let url = format!("sqlite://{}?mode=rwc", path.display());
+    let store = SqliteSchedulerStore::connect(&url).await.expect("connect");
+    run_child_shard_contract(&store)
+        .await
+        .expect("sqlite file child/shard contract");
+}
+
+#[tokio::test]
+#[ignore = "requires CHRONON_POSTGRES_URL or CHRONON_TEST_POSTGRES_URL"]
+async fn postgres_child_shard_contract() {
+    if std::env::var("CHRONON_POSTGRES_URL").is_err()
+        && std::env::var("CHRONON_TEST_POSTGRES_URL").is_err()
+    {
+        panic!("postgres URL env var required for ignored test");
+    }
+    let url = postgres_test_url();
+    let schema = format!("chronon_sets_{}", Uuid::new_v4().simple());
+    let store = PostgresSchedulerStore::connect_isolated(&url, &schema)
+        .await
+        .expect("connect postgres");
+    run_child_shard_contract(&store)
+        .await
+        .expect("postgres child/shard contract");
+}
+
+#[tokio::test]
+async fn composite_child_shard_contract_sqlite_redis() {
+    let prefix = format!("chronon_sets_{}", Uuid::new_v4().simple());
+    let Some(redis) = connect_redis(&prefix).await else {
+        eprintln!("skip composite_child_shard_contract_sqlite_redis: redis unavailable");
+        return;
+    };
+    let sql: Arc<dyn SchedulerStore> = Arc::new(
+        SqliteSchedulerStore::connect("sqlite://:memory:")
+            .await
+            .expect("sqlite"),
+    );
+    let store = PostgresRedisSchedulerStore::new(sql, redis);
+    run_child_shard_contract(&store)
+        .await
+        .expect("composite sqlite+redis child/shard contract");
+}
+
+#[tokio::test]
+#[ignore = "requires CHRONON_POSTGRES_URL and Redis"]
+async fn composite_child_shard_contract_postgres_redis() {
+    let prefix = format!("chronon_sets_{}", Uuid::new_v4().simple());
+    let Some(redis) = connect_redis(&prefix).await else {
+        panic!("redis required for ignored test");
+    };
+    if std::env::var("CHRONON_POSTGRES_URL").is_err()
+        && std::env::var("CHRONON_TEST_POSTGRES_URL").is_err()
+    {
+        panic!("postgres URL required for ignored test");
+    }
+    let url = postgres_test_url();
+    let schema = format!("chronon_sets_redis_{}", Uuid::new_v4().simple());
+    let sql: Arc<dyn SchedulerStore> = Arc::new(
+        PostgresSchedulerStore::connect_isolated(&url, &schema)
+            .await
+            .expect("postgres"),
+    );
+    let store = PostgresRedisSchedulerStore::new(sql, redis);
+    run_child_shard_contract(&store)
+        .await
+        .expect("composite postgres+redis child/shard contract");
 }

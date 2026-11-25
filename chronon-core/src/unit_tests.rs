@@ -7,7 +7,8 @@ use serde_json::json;
 use crate::context::{ContextFactory, NoOpContextFactory, ScriptContext};
 use crate::error::Result;
 use crate::models::{
-    Job, JobRevision, PartitionAssignment, Run, RunStatus, SchedulerLeader, Script, Worker,
+    ChildOutcome, ChildSet, Job, JobRevision, PartitionAssignment, Run, RunStatus, SchedulerLeader,
+    Script, ShardSet, Worker,
 };
 use crate::router::{StoreRouter, DEFAULT_STORE_NAME};
 use crate::store::SchedulerStore;
@@ -146,6 +147,60 @@ impl SchedulerStore for EmptyStore {
     async fn heartbeat_worker(&self, _: &str, _: DateTime<Utc>) -> Result<()> {
         Ok(())
     }
+    async fn set_run_outputs(&self, run_id: &str, _: &serde_json::Value) -> Result<()> {
+        Err(ChrononError::RunNotFound(run_id.to_string()))
+    }
+    async fn count_active_runs_for_job(&self, _: &str) -> Result<i64> {
+        Ok(0)
+    }
+    async fn create_child_set_with_runs(&self, _: &ChildSet, _: &[Run]) -> Result<()> {
+        Ok(())
+    }
+    async fn get_child_set(&self, _: &str) -> Result<Option<ChildSet>> {
+        Ok(None)
+    }
+    async fn list_child_sets_for_run(&self, _: &str) -> Result<Vec<ChildSet>> {
+        Ok(vec![])
+    }
+    async fn record_child_result(&self, set_id: &str, _: ChildOutcome) -> Result<ChildSet> {
+        Err(ChrononError::storage(format!(
+            "child set not found: {set_id}"
+        )))
+    }
+    async fn settle_child_set(&self, _: &str, _: DateTime<Utc>) -> Result<()> {
+        Ok(())
+    }
+    async fn create_shard_set(&self, _: &ShardSet) -> Result<()> {
+        Ok(())
+    }
+    async fn get_shard_set(&self, _: &str) -> Result<Option<ShardSet>> {
+        Ok(None)
+    }
+    async fn update_shard_set(&self, _: &ShardSet, _: &serde_json::Value) -> Result<bool> {
+        Ok(false)
+    }
+    async fn set_shard_checkpoint(
+        &self,
+        set_id: &str,
+        _: u32,
+        _: &serde_json::Value,
+    ) -> Result<()> {
+        Err(ChrononError::storage(format!(
+            "shard set not found: {set_id}"
+        )))
+    }
+}
+
+#[tokio::test]
+async fn empty_store_answers_set_methods() {
+    let store = EmptyStore;
+    assert_eq!(store.count_active_runs_for_job("j").await.unwrap(), 0);
+    assert!(store.get_child_set("s").await.unwrap().is_none());
+    assert!(store.get_shard_set("s").await.unwrap().is_none());
+    assert!(store
+        .record_child_result("s", ChildOutcome::Succeeded)
+        .await
+        .is_err());
 }
 
 #[test]

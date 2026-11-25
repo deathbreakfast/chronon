@@ -6,8 +6,8 @@ use chronon_core::models::Job;
 use sqlx::{ColumnIndex, Row};
 
 use super::{
-    decode_json, decode_json_opt, encode_json, encode_json_opt, parse_schedule_kind,
-    schedule_kind_to_str,
+    decode_json, decode_json_opt, encode_json, encode_json_opt, on_busy_to_str, parse_on_busy,
+    parse_schedule_kind, schedule_kind_parent, schedule_kind_to_str,
 };
 use crate::error_map::map_err;
 
@@ -39,6 +39,9 @@ pub struct JobRow {
     pub(crate) retry_policy_json: String,
     pub(crate) misfire_policy_json: String,
     pub(crate) parent_limits_json: Option<String>,
+    pub(crate) parent_job_id: Option<String>,
+    pub(crate) on_busy: String,
+    pub(crate) sharding_json: Option<String>,
     pub(crate) next_run_at: Option<DateTime<Utc>>,
     pub(crate) current_revision: i32,
     pub(crate) updated_at: DateTime<Utc>,
@@ -76,6 +79,9 @@ impl JobRow {
             retry_policy_json: encode_json(&job.retry_policy_json)?,
             misfire_policy_json: encode_json(&job.misfire_policy_json)?,
             parent_limits_json: encode_json_opt(job.parent_limits_json.as_ref())?,
+            parent_job_id: schedule_kind_parent(&job.schedule_kind),
+            on_busy: on_busy_to_str(job.on_busy).to_string(),
+            sharding_json: encode_json_opt(job.sharding_json.as_ref())?,
             next_run_at: job.next_run_at,
             current_revision: job.current_revision,
             updated_at: job.updated_at,
@@ -91,7 +97,7 @@ impl JobRow {
             script_name: self.script_name,
             script_sig_hash: self.script_sig_hash,
             enabled: self.enabled,
-            schedule_kind: parse_schedule_kind(&self.schedule_kind)?,
+            schedule_kind: parse_schedule_kind(&self.schedule_kind, self.parent_job_id)?,
             cron_expr: self.cron_expr,
             timezone: self.timezone,
             run_once_at: self.run_once_at,
@@ -112,6 +118,8 @@ impl JobRow {
             retry_policy_json: decode_json(&self.retry_policy_json)?,
             misfire_policy_json: decode_json(&self.misfire_policy_json)?,
             parent_limits_json: decode_json_opt(self.parent_limits_json)?,
+            on_busy: parse_on_busy(&self.on_busy)?,
+            sharding_json: decode_json_opt(self.sharding_json)?,
             next_run_at: self.next_run_at,
             current_revision: self.current_revision,
             updated_at: self.updated_at,
@@ -168,6 +176,9 @@ where
         retry_policy_json: row.try_get("retry_policy_json").map_err(map_err)?,
         misfire_policy_json: row.try_get("misfire_policy_json").map_err(map_err)?,
         parent_limits_json: row.try_get("parent_limits_json").map_err(map_err)?,
+        parent_job_id: row.try_get("parent_job_id").map_err(map_err)?,
+        on_busy: row.try_get("on_busy").map_err(map_err)?,
+        sharding_json: row.try_get("sharding_json").map_err(map_err)?,
         next_run_at: row.try_get("next_run_at").map_err(map_err)?,
         current_revision: row.try_get("current_revision").map_err(map_err)?,
         updated_at: row.try_get("updated_at").map_err(map_err)?,
@@ -178,7 +189,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use chronon_core::models::{Job, ScheduleKind};
+    use chronon_core::models::{Job, OnBusy, ScheduleKind};
 
     use super::JobRow;
 
@@ -189,5 +200,22 @@ mod tests {
         let back = row.to_model().expect("model");
         assert_eq!(back.job_name, "smoke");
         assert_eq!(back.schedule_kind, ScheduleKind::Cron);
+    }
+
+    #[test]
+    fn child_job_row_roundtrip() {
+        let mut job = Job::new("child", "script_a");
+        job.schedule_kind = ScheduleKind::Child {
+            parent_job_id: "parent".into(),
+        };
+        job.on_busy = OnBusy::QueueOne;
+        job.sharding_json = Some(serde_json::json!({"cursor": "id"}));
+        let row = JobRow::from_model(&job).expect("row");
+        assert_eq!(row.schedule_kind, "child");
+        assert_eq!(row.parent_job_id.as_deref(), Some("parent"));
+        let back = row.to_model().expect("model");
+        assert_eq!(back.schedule_kind, job.schedule_kind);
+        assert_eq!(back.on_busy, OnBusy::QueueOne);
+        assert_eq!(back.sharding_json, job.sharding_json);
     }
 }

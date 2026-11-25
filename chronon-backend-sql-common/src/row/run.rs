@@ -18,6 +18,7 @@ pub struct RunRow {
     pub(crate) parent_run_id: Option<String>,
     pub(crate) root_run_id: Option<String>,
     pub(crate) child_index: Option<i32>,
+    pub(crate) child_set_id: Option<String>,
     pub(crate) scheduled_for: DateTime<Utc>,
     pub(crate) started_at: Option<DateTime<Utc>>,
     pub(crate) finished_at: Option<DateTime<Utc>>,
@@ -29,6 +30,8 @@ pub struct RunRow {
     pub(crate) pool_id: Option<String>,
     pub(crate) actor_json: String,
     pub(crate) params_json: String,
+    pub(crate) run_values_json: String,
+    pub(crate) outputs_json: String,
     pub(crate) stdout_text: Option<String>,
     pub(crate) stderr_text: Option<String>,
     pub(crate) error_json: Option<String>,
@@ -48,6 +51,7 @@ impl RunRow {
             parent_run_id: run.parent_run_id.clone(),
             root_run_id: run.root_run_id.clone(),
             child_index: run.child_index,
+            child_set_id: run.child_set_id.clone(),
             scheduled_for: run.scheduled_for,
             started_at: run.started_at,
             finished_at: run.finished_at,
@@ -59,6 +63,8 @@ impl RunRow {
             pool_id: run.pool_id.clone(),
             actor_json: encode_json(&run.actor_json)?,
             params_json: encode_json(&run.params_json)?,
+            run_values_json: encode_json(&run.run_values_json)?,
+            outputs_json: encode_json(&run.outputs_json)?,
             stdout_text: run.stdout_text.clone(),
             stderr_text: run.stderr_text.clone(),
             error_json: encode_json_opt(run.error_json.as_ref())?,
@@ -77,6 +83,7 @@ impl RunRow {
             parent_run_id: self.parent_run_id,
             root_run_id: self.root_run_id,
             child_index: self.child_index,
+            child_set_id: self.child_set_id,
             scheduled_for: self.scheduled_for,
             started_at: self.started_at,
             finished_at: self.finished_at,
@@ -88,6 +95,8 @@ impl RunRow {
             pool_id: self.pool_id,
             actor_json: decode_json(&self.actor_json)?,
             params_json: decode_json(&self.params_json)?,
+            run_values_json: decode_json(&self.run_values_json)?,
+            outputs_json: decode_json(&self.outputs_json)?,
             stdout_text: self.stdout_text,
             stderr_text: self.stderr_text,
             error_json: decode_json_opt(self.error_json)?,
@@ -120,6 +129,7 @@ where
         parent_run_id: row.try_get("parent_run_id").map_err(map_err)?,
         root_run_id: row.try_get("root_run_id").map_err(map_err)?,
         child_index: row.try_get("child_index").map_err(map_err)?,
+        child_set_id: row.try_get("child_set_id").map_err(map_err)?,
         scheduled_for: row.try_get("scheduled_for").map_err(map_err)?,
         started_at: row.try_get("started_at").map_err(map_err)?,
         finished_at: row.try_get("finished_at").map_err(map_err)?,
@@ -131,6 +141,8 @@ where
         pool_id: row.try_get("pool_id").map_err(map_err)?,
         actor_json: row.try_get("actor_json").map_err(map_err)?,
         params_json: row.try_get("params_json").map_err(map_err)?,
+        run_values_json: row.try_get("run_values_json").map_err(map_err)?,
+        outputs_json: row.try_get("outputs_json").map_err(map_err)?,
         stdout_text: row.try_get("stdout_text").map_err(map_err)?,
         stderr_text: row.try_get("stderr_text").map_err(map_err)?,
         error_json: row.try_get("error_json").map_err(map_err)?,
@@ -156,7 +168,8 @@ mod tests {
             script_name: "script_a".into(),
             parent_run_id: None,
             root_run_id: None,
-            child_index: None,
+            child_index: Some(2),
+            child_set_id: Some("set-1".into()),
             scheduled_for: Utc::now(),
             started_at: None,
             finished_at: None,
@@ -168,6 +181,8 @@ mod tests {
             pool_id: Some("general".into()),
             actor_json: serde_json::json!({}),
             params_json: serde_json::json!({}),
+            run_values_json: serde_json::json!({"depth": 1}),
+            outputs_json: serde_json::json!({"cursor": 5}),
             stdout_text: None,
             stderr_text: None,
             error_json: None,
@@ -179,5 +194,8 @@ mod tests {
         let back = row.to_model().expect("model");
         assert_eq!(back.run_id, "r1");
         assert_eq!(back.status, RunStatus::Queued);
+        assert_eq!(back.child_set_id.as_deref(), Some("set-1"));
+        assert_eq!(back.run_values_json, run.run_values_json);
+        assert_eq!(back.outputs_json, run.outputs_json);
     }
 }

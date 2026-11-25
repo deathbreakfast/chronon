@@ -28,6 +28,7 @@ mod runner;
 mod runner_steps;
 mod runner_types;
 mod scenario;
+mod sets_contract;
 mod shared_store;
 mod store_contract;
 
@@ -53,6 +54,7 @@ pub use matrix::{DeploymentKind, MatrixSpec, StorageAdapter, TelemetryAdapter, T
 pub use runner::{ScenarioResult, ScenarioRunner};
 pub use runner_types::{RunMode, StepTiming};
 pub use scenario::{ScenarioSpec, ScenarioStep, ScriptProbeKind};
+pub use sets_contract::run_child_shard_contract;
 pub use shared_store::{extended_store_available, extended_store_skip_reason};
 pub use store_contract::run_store_contract;
 
